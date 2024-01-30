@@ -17,9 +17,6 @@ Provide a brief overview of your game, including its genre, theme, and main obje
 ## Features
 List the main features of your game, such as:
 - Multiple levels
-- Character customization
-- Achievements system
-- etc.
 
 ## Installation
 Provide instructions on how to install or run your game. Include any prerequisites or dependencies.
