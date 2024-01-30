@@ -69,23 +69,15 @@ Player.prototype.update = function(time, state, keys) {
     ySpeed = 0;
   }
 
-  //add check on state lost if player is dead
-  /*if (state.level.touches(pos, this.size, "lava") && !this.isDead) {
-    this.isDead = true;
-    return new Player(pos, new Vec(xSpeed, ySpeed), true);
-  } else if (state.level.touches(pos, this.size, "lava") && this.isDead) {
-    return new Player(pos, new Vec(xSpeed, ySpeed), true);
-  } else {
-    return new Player(pos, new Vec(xSpeed, ySpeed), false);
-  }*/
+
   //add check on state lost if player is dead
   if (state.status == "lost" && !this.isDead){
     this.isDead = true;
+
     return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
   }else {
     return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
   }
-  //return new Player(pos, new Vec(xSpeed, ySpeed));
 };
 
 class Lava {
@@ -316,10 +308,19 @@ function elt(name, attrs, ...children) {
 var CanvasDisplay = class CanvasDisplay {
   constructor(parent, level) {
     this.canvas = document.createElement("canvas");
-    this.canvas.width = Math.min(600, level.width * scale);
-    this.canvas.height = Math.min(450, level.height * scale);
+    this.canvas.width = Math.min(800, level.width * scale);
+    this.canvas.height = Math.min(600, level.height * scale);
     parent.appendChild(this.canvas);
     this.cx = this.canvas.getContext("2d");
+
+    //add text element on the middle of the canvas
+    this.text = elt("div", {class: "text"});
+    this.text.innerText = "Press arrow keys to move";
+    parent.appendChild(this.text);
+    
+    //add element for coin counter
+    this.coinCounter = elt("div", {class: "coinCounter"});
+    parent.appendChild(this.coinCounter);
 
     this.flipPlayer = false;
 
@@ -340,6 +341,17 @@ var CanvasDisplay = class CanvasDisplay {
     this.clearDisplay(state.status);
     this.drawBackground(state.level);
     this.drawActors(state.actors);
+    //update coin counter
+    this.coinCounter.innerText = `Coins: ${state.actors.filter(a => a.type == "coin").length}`;
+
+    // add element on the middle of the canvas with win message or loose message
+    if (state.status == "won") {
+      this.text.innerText = "You've won!";
+    } else if (state.status == "lost") {
+      this.text.innerText = "You've lost!";
+    } else {
+      this.text.innerText = "";
+    }
   }
 
   updateViewport(state) {
@@ -500,9 +512,9 @@ drawMonster(monster, x, y, width, height) {
     tile = 9;
   } else if (monster.speed.x != 0) {
     tile = Math.floor(Date.now() / 60) % 8;
-  }/*else if (monster.isDead) {
+  } else if (monster.isDead) {
     tile = 10;
-  }*/
+  }
 
   // Save the current drawing state.
   this.cx.save();
@@ -622,6 +634,7 @@ async function runGame(plans, Display) {
 function trackKeys(keys) {
   let down = Object.create(null);
   function track(event) {
+    
     if (keys.includes(event.key)) {
       down[event.key] = event.type == "keydown";
       event.preventDefault();
@@ -631,6 +644,7 @@ function trackKeys(keys) {
   window.addEventListener("keyup", track);
   return down;
 }
+
 
 var arrowKeys = trackKeys([
   "ArrowLeft",
