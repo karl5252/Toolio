@@ -14,6 +14,12 @@ monsterSprites.src = "img/monster.png";
 var monsterXOverlap = 4;
 
 
+var arrowKeys = trackKeys([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+]);
+
 
 
 class Vec {
@@ -120,6 +126,7 @@ class Coin {
     return new Coin(basePos, basePos, Math.random() * Math.PI * 2);
   }
 }
+
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
   if (!state.level.touches(newPos, this.size, "wall")) {
@@ -143,10 +150,12 @@ Coin.prototype.update = function(time) {
 
 //add class Monster and its methods
 class Monster {
-  constructor(pos, speed, isDead = false) {
+  constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
     this.speed = speed;
     this.isDead = isDead;
+    this.deadTime = deadTime || 0;
+
 
   }
 
@@ -163,16 +172,19 @@ Monster.prototype.size = new Vec(0.8, 1.5);
 
 Monster.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  if ( this.isDead){
-    console.log("Monster is dead");
-    return new Monster(this.pos, this.speed, this.isDead);
-  } else if (!state.level.touches(newPos, this.size, "wall")) {
-    return new Monster(newPos, this.speed);
-  } else {
-    return new Monster(this.pos, this.speed.times(-1));
+  if (this.isDead) {
+    this.deadTime += time;
+    if (this.deadTime > 1) { // 1 second delay
+      let filtered = state.actors.filter(a => a != this);
+      return new State(state.level, filtered, state.status);
+    }
   }
-
-}
+  if (!state.level.touches(newPos, this.size, "wall")) {
+    return new Monster(newPos, this.speed, this.isDead, this.deadTime);
+  } else {
+    return new Monster(this.pos, this.speed.times(-1), this.isDead, this.deadTime);
+  }
+};
 
 
 var levelChars = {
@@ -223,6 +235,10 @@ Level.prototype.touches = function(pos, size, type) {
 };
 
 function overlap(actor1, actor2) {
+    // If either actor is dead, they don't overlap.
+    if (actor1.isDead || actor2.isDead) {
+      return false;
+    }
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
@@ -243,19 +259,19 @@ Coin.prototype.collide = function(state) {
 
 Monster.prototype.collide = function(state) {
   let player = state.player;
-  let filtered = state.actors.filter(a => a != this);
   let status = state.status;
   if (player.pos.y + player.size.y < this.pos.y + 0.5) {
     //kill monster - set its isDead to true
     this.isDead = true;
-    console.log("Monster is dead");  //this is for debugging 
-
-
-    return new State(state.level, filtered, status);
-  } else {
+    this.speed.x = 0;
+    console.log("Monster is stomped and dies");  //this is for debugging 
+    return new State(state.level, state.actors, status);
+  } else if (!this.isDead) {
+    let filtered = state.actors.filter(a => a != this);
     return new State(state.level, filtered, "lost");
   }
-}
+  return new State(state.level, state.actors, status);
+};
 
 
 class State {
@@ -275,6 +291,7 @@ class State {
 
   update(time, keys) {
     let actors = this.actors.map((actor) => actor.update(time, this, keys));
+    actors = actors.filter(actor => !actor.isDead || actor.type === 'player');
     let newState = new State(this.level, actors, this.status);
 
     if (newState.status != "playing") return newState;
@@ -412,7 +429,7 @@ var CanvasDisplay = class CanvasDisplay {
         if (tile == "lava") {
           tileX = scale;
         } else if (tile == "stone") {
-          tileX = 2 * scale; // Change this to the x-coordinate of the new texture in your spritesheet
+          tileX = 3.5 * scale; // Change this to the x-coordinate of the new texture in your spritesheet
         } else {
           tileX = 0;
         }
@@ -488,38 +505,41 @@ drawPlayer(player, x, y, width, height) {
 }
 
 /**
- * Draws the player on the canvas.
+ * Draws the monster on the canvas.
  *
- * @param {Monster} monster The player object, which includes properties for speed.
- * @param {int} x The x-coordinate where the player should be drawn.
- * @param {int} y The y-coordinate where the player should be drawn.
- * @param {float} width The width of the player's sprite.
- * @param {float} height The height of the player's sprite.
+ * @param {Monster} monster The monster object, which includes properties for speed.
+ * @param {int} x The x-coordinate where the monster should be drawn.
+ * @param {int} y The y-coordinate where the monster should be drawn.
+ * @param {float} width The width of the monster's sprite.
+ * @param {float} height The height of the monster's sprite.
  */
 drawMonster(monster, x, y, width, height) {
-  // Adjust the width and x-coordinate based on the player's overlap.
+  // Adjust the width and x-coordinate based on the monster's overlap.
   width += monsterXOverlap * 2;
   x -= monsterXOverlap;
 
-  // Determine whether to flip the player's sprite based on the player's x speed.
+  // Determine whether to flip the monster's sprite based on the monster's x speed.
   if (monster.speed.x != 0) {
     this.flipMonster = monster.speed.x < 0;
   }
 
-  // Choose a tile from the player's sprite sheet based on the player's speed.
+  // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
-  if (monster.speed.y != 0) {
+  if (monster.isDead) {
+    console.log("Drawing dead monster");
+    tile = 10;
+  } else if (monster.speed.y != 0) {
     tile = 9;
   } else if (monster.speed.x != 0) {
     tile = Math.floor(Date.now() / 60) % 8;
-  } else if (monster.isDead) {
-    tile = 10;
+  } else {
+    tile = 8;
   }
 
   // Save the current drawing state.
   this.cx.save();
 
-  // If the player's sprite should be flipped, flip it horizontally.
+  // If the monster's sprite should be flipped, flip it horizontally.
   if (this.flipMonster) {
     this.flipHorizontally(x + width / 2);
   }
@@ -645,11 +665,5 @@ function trackKeys(keys) {
   return down;
 }
 
-
-var arrowKeys = trackKeys([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-]);
 
 //runGame([simpleLevelPlan], CanvasDisplay);
