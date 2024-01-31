@@ -2,6 +2,16 @@ var playerXSpeed = 7;
 var gravity = 30;
 var jumpSpeed = 17;
 const scale = 20;
+
+let score = 0;
+
+
+var arrowKeys = trackKeys([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+]);
+
 var otherSprites = document.createElement("img");
 otherSprites.src = "img/sprites.png";
 
@@ -9,11 +19,9 @@ var playerSprites = document.createElement("img");
 playerSprites.src = "img/player.png";
 var playerXOverlap = 4;
 
-var monsterSprites = document.createElement("img");
-monsterSprites.src = "img/monster.png";
-var monsterXOverlap = 4;
-
-
+var hoompaSprites = document.createElement("img");
+hoompaSprites.src = "img/monster.png";
+var hoompaXOverlap = 4;
 
 
 class Vec {
@@ -30,8 +38,331 @@ class Vec {
     return new Vec(this.x * factor, this.y * factor);
   }
 }
+/**
+ * represents an abstract game actor
+ * @class Actor
+ * @param {Vec} pos 
+ * @param {Vec} speed
+ * @param {boolean} isDead
+ */
+class Actor {
+  constructor(pos, speed, isDead = false) {
+    this.pos = pos;
+    this.speed = speed;
+    this.isDead = isDead;
+  }
+}
 
-class Player {
+/**
+ * represents a player
+ * @class Player
+ * @param {Vec} pos
+ * @param {Vec} speed
+ * @param {boolean} isDead
+ * @param {number} size 
+ */
+class Player extends Actor {
+  constructor(pos, speed, isDead = false, size = 1) {
+    super(pos, speed, isDead);
+    this.size = size;
+  }
+
+  get type() {
+    return "player";
+  }
+
+}
+/**
+ *  draws a new player
+ * @param {} context 
+ * @param {} x 
+ * @param {} y 
+ * @param {} width 
+ * @param {} height 
+ */
+Player.prototype.draw = function(context, x, y, width, height) {
+  context.drawImage(playerSprites, this.spriteX, this.spriteY, this.spriteWidth, this.spriteHeight, x, y, width, height);
+};
+
+Player.prototype.update = function(time, state, keys) {
+  if (this.isDead) {
+    state.freeze(500)
+  }
+};
+/**
+ * represents a monster
+ * @class Monster
+ * @param {Vec} pos
+ * @param {Vec} speed
+ * @param {boolean} isDead
+ */
+class Monster extends Actor {
+  constructor(pos, speed, isDead = false) {
+    super(pos, speed, isDead);
+  }
+}
+/**
+ * draws a new monster
+ * @param {*} pos
+ * @param {*} speed
+ * @param {*} isDead
+ * 
+ */
+class Hoompa extends Monster {
+  constructor(pos, speed, isDead = false) {
+    super(pos, speed, isDead);
+  }
+
+  get type() { 
+    return "hoompa";
+  }
+}
+
+Hoompa.prototype.draw = function(context, x, y, width, height) {
+  context.drawImage(hoompaSprites, this.spriteX, this.spriteY, this.spriteWidth, this.spriteHeight, x, y, width, height);
+};
+
+class Wall {
+  constructor() {
+    this.isDestroyed = false;
+  }
+  update = function(time, state, keys) {
+    let xSpeed = 0;
+    if (keys.ArrowLeft) xSpeed -= playerXSpeed;
+    if (keys.ArrowRight) xSpeed += playerXSpeed;
+    let pos = this.pos;
+    let movedX = pos.plus(new Vec(xSpeed * time, 0));
+    if (!state.level.touches(movedX, this.size, "wall")) {
+      pos = movedX;
+    }
+  
+    let ySpeed = this.speed.y + time * gravity;
+    let movedY = pos.plus(new Vec(0, ySpeed * time));
+    if (!state.level.touches(movedY, this.size, "wall")) {
+      pos = movedY;
+    } else if (keys.ArrowUp && ySpeed > 0) {
+      ySpeed = -jumpSpeed;
+    } else {
+      ySpeed = 0;
+    }
+  }
+}
+
+Wall.prototype.size = new Vec(1, 1);
+//if player touches the wall from sides or top - do nothing
+
+
+/**
+ * represents a brick wall that is destructible
+ */
+class BrickWall extends Wall {
+  constructor() {
+    super();
+    
+  }
+}
+BrickWall.prototype.size = new Vec(1, 1);
+
+class BrickWallWithPowerUp extends Wall {
+  constructor() {
+    super();
+    this.surprise = surprise;  // can be coin, mushroom, flower, star or nothin
+  }
+}
+BrickWallWithPowerUp.prototype.size = new Vec(1, 1);
+    //if hit from below
+    //move this piece of wall up by 4 pixels
+    //change wall type to StoneWall instance
+    //instantiate the 'PowerUp' object above this piece of wall
+    //add the PowerUp object to the state.actors array
+    //remove the BrickWallWithPowerUp instance from the state.actors array
+    //if hit from sides or top - do nothing
+    BrickWallWithPowerUp.prototype.update = function(time, state, keys) {
+      let xSpeed = 0;
+      if (keys.ArrowLeft) xSpeed -= playerXSpeed;
+      if (keys.ArrowRight) xSpeed += playerXSpeed;
+      let pos = this.pos;
+      let movedX = pos.plus(new Vec(xSpeed * time, 0));
+      if (!state.level.touches(movedX, this.size, "wall")) {
+        pos = movedX;
+      }
+    
+      let ySpeed = this.speed.y + time * gravity;
+      let movedY = pos.plus(new Vec(0, ySpeed * time));
+      if (!state.level.touches(movedY, this.size, "wall")) {
+        pos = movedY;
+      } else if (keys.ArrowUp && ySpeed > 0) {
+        ySpeed = -jumpSpeed;
+      } else {
+        ySpeed = 0;
+      }
+    }
+
+
+
+/**
+ * represents a stone wall that is indestructible
+ */
+class StoneWall extends Wall {
+  constructor() {
+    super();
+    this.unbreakable = true;
+  }
+}
+
+/**
+ * represents a coin that is a collectible item
+ */
+class Coin {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+    this.wobble = wobble;
+  }
+}
+
+/**
+ * represents a yeast packet that is a power-up
+ */
+class YeastPacket {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+  }
+}
+class Powerup {
+  constructor(type) {
+    this.type = type;
+  }
+
+  getCapability() {
+    // Determine and return the capability based on the powerup type
+    switch (this.type) {
+      case 'coin':
+        return 'coin'; //return coin instance 
+      case 'yeast':
+        return 'sizeUp'; // Example: collecting a yeast increases player's size
+      // Add more cases for other powerup types as needed
+      default:
+        return null;
+    }
+  }
+}
+
+/**
+ * represents a lava that is a deadly obstacle
+ */
+class Lava {
+  constructor(pos, speed, reset) {
+    this.pos = pos;
+    this.speed = speed;
+    this.reset = reset;
+  }
+}
+/**
+ * represents a level drawn from a string provided by levels.js
+ * @class Level
+ * @param {string} plan
+ */
+class Level {
+  constructor(plan) {
+    let rows = plan.trim().split("\n").map((l) => [...l]);
+    this.height = rows.length;
+    this.width = rows[0].length;
+    this.startActors = [];
+
+    this.rows = rows.map((row, y) => {
+      return row.map((ch, x) => {
+        let type = levelChars[ch];
+        if (typeof type == "string") return type;
+        this.startActors.push(type.create(new Vec(x, y), ch));
+        return "empty";
+      });
+    });
+  }
+} 
+/**
+ * represents a game state
+ */
+class State {
+  constructor(level, actors, status) {
+    this.level = level;
+    this.actors = actors;
+    this.status = status;
+    this.freezeTime = null;
+  }
+
+  update(time, keys) {
+    if (Date.now() < this.freezeTime) {
+      return;
+    }
+  }
+
+  freeze(duration) {
+    this.freezeTime = Date.now() + duration;
+  }
+}
+/**
+ * represents a game canvas
+ */
+class CanvasDisplay {
+  constructor(parent, level) {
+    this.canvas = document.createElement("canvas");
+    this.canvas.width = Math.min(800, level.width * scale);
+    this.canvas.height = Math.min(600, level.height * scale);
+    parent.appendChild(this.canvas);
+    this.cx = this.canvas.getContext("2d");
+  }
+}
+
+function updateScore(newScore) {
+  score = newScore;
+}
+/**
+ * 
+ * @param {*} context 
+ */
+function renderScore(context) {
+  context.font = '20px Arial';
+  context.fillStyle = 'black';
+  context.fillText(`Score: ${score}`, 10, 30);
+}
+/**
+ * 
+ * @param {*} time 
+ */
+function gameLoop(time) {
+  handleInput();
+  if (keys.isDown('ESCAPE')) {
+    state.freeze(Infinity);
+  }
+  updateGameState(time);
+  drawFrame();
+  renderScore(context);
+  requestAnimationFrame(gameLoop);
+}
+ /**
+  * 
+  * @param {*} keys 
+  * @returns key 
+  */
+function trackKeys(keys) {
+  let down = Object.create(null);
+  function track(event) {
+    
+    if (keys.includes(event.key)) {
+      down[event.key] = event.type == "keydown";
+      event.preventDefault();
+    }
+  }
+  window.addEventListener("keydown", track);
+  window.addEventListener("keyup", track);
+  return down;
+}
+
+
+
+/*class Player {
   constructor(pos, speed, isDead = false) {
     this.pos = pos;
     this.speed = speed;
@@ -430,7 +761,7 @@ var CanvasDisplay = class CanvasDisplay {
       }
     }
   }
-/**
+/*
  * Draws the player on the canvas.
  *
  * @param {Player} player The player object, which includes properties for speed.
@@ -439,6 +770,7 @@ var CanvasDisplay = class CanvasDisplay {
  * @param {float} width The width of the player's sprite.
  * @param {float} height The height of the player's sprite.
  */
+/*
 drawPlayer(player, x, y, width, height) {
   // Adjust the width and x-coordinate based on the player's overlap.
   width += playerXOverlap * 2;
@@ -486,8 +818,9 @@ drawPlayer(player, x, y, width, height) {
   // Restore the saved drawing state.
   this.cx.restore();
 }
+*/
 
-/**
+/*
  * Draws the player on the canvas.
  *
  * @param {Monster} monster The player object, which includes properties for speed.
@@ -496,6 +829,8 @@ drawPlayer(player, x, y, width, height) {
  * @param {float} width The width of the player's sprite.
  * @param {float} height The height of the player's sprite.
  */
+
+/*
 drawMonster(monster, x, y, width, height) {
   // Adjust the width and x-coordinate based on the player's overlap.
   width += monsterXOverlap * 2;
@@ -651,5 +986,5 @@ var arrowKeys = trackKeys([
   "ArrowRight",
   "ArrowUp",
 ]);
-
+*/
 //runGame([simpleLevelPlan], CanvasDisplay);
