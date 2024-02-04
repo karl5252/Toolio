@@ -4,6 +4,8 @@ var jumpSpeed = 17;
 const scale = 20;
 let paused = false;
 
+let introShown = false;
+
 var otherSprites = document.createElement("img");
 otherSprites.src = "img/sprites.png";
 
@@ -358,9 +360,8 @@ var CanvasDisplay = class CanvasDisplay {
       this.canvas.width = Math.min(800, level.width * scale);
       this.canvas.height = Math.min(600, level.height * scale);
       parent.appendChild(this.canvas);
-      this.cx = this.canvas.getContext("2d");
-
     }
+    this.cx = this.canvas.getContext("2d");
 
     this.flipPlayer = false;
 
@@ -373,7 +374,13 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   clear() {
-    this.canvas.remove();
+    if (this.canvas) {
+      this.cx = this.canvas.getContext('2d');
+      this.cx.fillStyle = 'black';
+      this.cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    } else {
+      console.error('Cannot clear canvas because it does not exist');
+    }
   }
 
   drawStatus(state) {
@@ -397,7 +404,32 @@ var CanvasDisplay = class CanvasDisplay {
     this.cx.fillText(coinsCollectedText, coinsCollectedTextPosition, 30);
   }
 
+  drawIntro() {
+    console.log('Drawing intro screen');
+
+    let cx = this.canvas.getContext('2d');
+
+    cx.font = 'bold 20px "Courier New"';
+    cx.fillStyle = 'black';
+    //fill canvas with solid black
+    cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    cx.fillStyle = 'white';
+    cx.fillText('Welcome to the game!', 100, 50);
+    cx.fillText("Press any key to start", 100, 100);
+    cx.fillText("Use arrow keys to move", 100, 150);
+    cx.fillText("Press 'P' to pause", 100, 200);
+    // add here other instructions to play the game
+  }
+
+  drawOutro() {
+    this.cx.font = 'bold 20px "Courier New"';
+    this.cx.fillStyle = 'white';
+    this.cx.fillText("Game Over", 100, 100);
+    this.cx.fillText("Press any key to restart", 100, 150);
+  }
+
   syncState(state) {
+    console.log('Syncing game state:', state.status); 
     this.updateViewport(state);
     this.clearDisplay(state.status);
     this.drawBackground(state.level);
@@ -644,9 +676,7 @@ function runAnimation(frameFunc) {
   function frame(time) {
     if (lastTime != null) {
       let timeStep = Math.min(time - lastTime, 100) / 1000;
-      if (!paused) {
-        if (frameFunc(timeStep) === false) return;
-      }
+      if (frameFunc(timeStep) === false) return;
     }
     lastTime = time;
     requestAnimationFrame(frame);
@@ -655,14 +685,16 @@ function runAnimation(frameFunc) {
 }
 
 function runLevel(level, Display) {
-  let display = new Display(
-    document.body,
-    level
-  );
+  let display = new Display(document.body, level);
   let state = State.start(level);
   let ending = 1;
   return new Promise((resolve) => {
     runAnimation((time) => {
+      if (introShown) {
+        state.status = 'playing';
+      } else {
+        state.status = 'intro';
+      }
       state = state.update(time, arrowKeys);
       display.syncState(state);
       if (state.status == "playing") {
@@ -670,6 +702,26 @@ function runLevel(level, Display) {
       } else if (ending > 0) {
         ending -= time;
         return true;
+      } else if(state.status === "intro"){
+        display.drawIntro();
+
+        // Add keydown listener for the ENTER key to start the game
+        window.addEventListener('keydown', function(event) {
+          console.log('Key pressed:', event.key); // Log the key that was pressed
+          if (event.key === 'Enter') {
+            console.log('ENTER key pressed'); // Log when the ENTER key is pressed
+            //state = State.start(level);
+            introShown = true;
+            //state.status = "playing";
+            console.log('Game state after pressing ENTER:', state.status); // Log the game state after pressing ENTER
+
+            //state.score = 0;
+            //state.coinsCollected = 0;
+            resolve(state.status);
+          }
+        }, {once: true}); // The listener is removed after being invoked once
+
+        return false;
       } else {
         display.clear();
         resolve(state.status);
