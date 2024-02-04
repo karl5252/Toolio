@@ -2,6 +2,8 @@ var playerXSpeed = 7;
 var gravity = 30;
 var jumpSpeed = 17;
 const scale = 20;
+let paused = false;
+
 var otherSprites = document.createElement("img");
 otherSprites.src = "img/sprites.png";
 
@@ -642,7 +644,9 @@ function runAnimation(frameFunc) {
   function frame(time) {
     if (lastTime != null) {
       let timeStep = Math.min(time - lastTime, 100) / 1000;
-      if (frameFunc(timeStep) === false) return;
+      if (!paused) {
+        if (frameFunc(timeStep) === false) return;
+      }
     }
     lastTime = time;
     requestAnimationFrame(frame);
@@ -698,6 +702,12 @@ function trackKeys(keys) {
   }
   window.addEventListener("keydown", track);
   window.addEventListener("keyup", track);
+  window.addEventListener('keydown', function(event) {
+    if (event.key === 'p' || event.key === 'P') { // Replace 'p' with your pause key
+      paused = !paused;
+      console.debug("paused: ", paused);
+    }
+  });
   return down;
 }
 
