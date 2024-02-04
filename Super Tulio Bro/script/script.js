@@ -41,6 +41,8 @@ class Player {
   constructor(pos, speed, isDead = false) {
     this.pos = pos;
     this.speed = speed;
+    this.score = 0;
+    this.coinsCollected = 0;
     this.isDead = isDead;
     this.interactable = true;
   }
@@ -251,14 +253,19 @@ function overlap(actor1, actor2) {
 }
 
 Lava.prototype.collide = function(state) {
-  return new State(state.level, state.actors, "lost");
+  return new State(state.level, state.actors, "lost", this.coinsCollected);
 };
 
 Coin.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
   let status = state.status;
   if (!filtered.some(a => a.type == "coin")) status = "won";
-  return new State(state.level, filtered, status);
+
+  // Increment coinsCollected property of the State class
+  console.log("updating the coin counter on collision with coin");
+  let coinsCollected = state.coinsCollected + 1;
+
+  return new State(state.level, filtered, status, coinsCollected);
 };
 
 
@@ -269,23 +276,25 @@ Monster.prototype.collide = function(state) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
-      return new State(state.level, state.actors, state.status);
+      return new State(state.level, state.actors, state.status, state.coinsCollected);
     } else {
-      return new State(state.level, state.actors.filter(a => a != this), "lost");
+      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
     }
   }
-  return new State(state.level, state.actors, state.status);
+  return new State(state.level, state.actors, state.status, state.coinsCollected);
 };
 
 class State {
-  constructor(level, actors, status) {
+  constructor(level, actors, status, coinsCollected = 0) {
     this.level = level;
     this.actors = actors;
     this.status = status;
+
+    this.coinsCollected = coinsCollected;
   }
 
   static start(level) {
-    return new State(level, level.startActors, "playing");
+    return new State(level, level.startActors, "playing", this.coinsCollected);
   }
 
   get player() {
@@ -295,13 +304,13 @@ class State {
   update(time, keys) {
     let actors = this.actors.map((actor) => actor.update(time, this, keys));
     actors = actors.filter(actor => !actor.remove);
-    let newState = new State(this.level, actors, this.status);
+    let newState = new State(this.level, actors, this.status, this.coinsCollected);
 
     if (newState.status != "playing") return newState;
 
     let player = newState.player;
     if (this.level.touches(player.pos, player.size, "lava")) {
-      return new State(this.level, actors, "lost");
+      return new State(this.level, actors, "lost", this.coinsCollected);
     }
 
     for (let actor of actors) {
@@ -309,6 +318,7 @@ class State {
         newState = actor.collide(newState);
       }
     }
+    console.log("coinsCollected: ", newState.coinsCollected);
     return newState;
   }
 }
@@ -347,12 +357,25 @@ var CanvasDisplay = class CanvasDisplay {
     this.canvas.remove();
   }
 
+  drawStatus(state) {
+    this.cx.font = '20px Arial';
+    this.cx.fillStyle = 'black';
+  
+    let levelText = `Level: ${state.level.name}`;
+    let scoreText = `Score: ${state.score}`;
+    let coinsCollectedText = `Coins Collected: ${state.coinsCollected}`;
+
+    this.cx.fillText(levelText, 10, 30);
+    this.cx.fillText(scoreText, 10, 60);
+    this.cx.fillText(coinsCollectedText, 10, 90);
+  }
+
   syncState(state) {
     this.updateViewport(state);
     this.clearDisplay(state.status);
     this.drawBackground(state.level);
     this.drawActors(state.actors);
-
+    this.drawStatus(state);
 
   }
 
@@ -650,18 +673,7 @@ function trackKeys(keys) {
   return down;
 }
 
-function drawStatus(state, context) {
-  context.font = '20px Arial';
-  context.fillStyle = 'black';
-  
-  let levelText = `Level: ${state.level}`;
-  let scoreText = `Score: ${state.score}`;
-  let coinsCollectedText = `Coins Collected: ${state.coinsCollected}`;
 
-  context.fillText(levelText, 10, 30);
-  context.fillText(scoreText, 10, 60);
-  context.fillText(coinsCollectedText, 10, 90);
-}
 
 
 //runGame([simpleLevelPlan], CanvasDisplay);
