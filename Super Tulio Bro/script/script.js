@@ -159,8 +159,6 @@ class Monster {
     this.isDead = isDead;
     this.interactable = true;
     this.deadTime = deadTime || 0;
-
-
   }
 
   get type() {
@@ -181,17 +179,27 @@ Monster.prototype.update = function(time, state) {
       this.remove = true; // Mark the monster for removal
     } 
     return this; // Make the monster non-interactable
-    }
-
-  let newPos = this.pos.plus(this.speed.times(time));
-
-  if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {
-    return new Monster(newPos, this.speed, this.isDead, this.deadTime);
-  } else {
-    return new Monster(this.pos, this.speed.times(-1), this.isDead, this.deadTime);
   }
-};
 
+  let xSpeed = this.speed.x;
+  let ySpeed = this.speed.y + time * gravity;
+  let pos = this.pos;
+  let movedX = pos.plus(new Vec(xSpeed * time, 0));
+  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
+    pos = movedX;
+  } else {
+    xSpeed = -xSpeed; // Reverse direction when hitting a wall
+  }
+
+  let movedY = pos.plus(new Vec(0, ySpeed * time));
+  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
+    pos = movedY;
+  } else if (ySpeed > 0) {
+    ySpeed = 0;
+  }
+
+  return new Monster(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
+};
 
 var levelChars = {
   ".": "empty",
@@ -262,7 +270,7 @@ Coin.prototype.collide = function(state) {
   if (!filtered.some(a => a.type == "coin")) status = "won";
 
   // Increment coinsCollected property of the State class
-  console.log("updating the coin counter on collision with coin");
+  console.debug("updating the coin counter on collision with coin");
   let coinsCollected = state.coinsCollected + 1;
 
   return new State(state.level, filtered, status, coinsCollected);
@@ -318,7 +326,7 @@ class State {
         newState = actor.collide(newState);
       }
     }
-    console.log("coinsCollected: ", newState.coinsCollected);
+    //console.log("coinsCollected: ", newState.coinsCollected);
     return newState;
   }
 }
@@ -337,11 +345,20 @@ function elt(name, attrs, ...children) {
 
 var CanvasDisplay = class CanvasDisplay {
   constructor(parent, level) {
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = Math.min(800, level.width * scale);
-    this.canvas.height = Math.min(600, level.height * scale);
-    parent.appendChild(this.canvas);
-    this.cx = this.canvas.getContext("2d");
+    let existingCanvas = document.querySelector("canvas");
+    console.debug("existingCanvas: ", existingCanvas);
+    if (existingCanvas){
+      this.canvas = existingCanvas;
+      //this.canvas.getContext('2d').clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }else{
+      console.debug("creating new canvas");
+      this.canvas = document.createElement("canvas");
+      this.canvas.width = Math.min(800, level.width * scale);
+      this.canvas.height = Math.min(600, level.height * scale);
+      parent.appendChild(this.canvas);
+      this.cx = this.canvas.getContext("2d");
+
+    }
 
     this.flipPlayer = false;
 
@@ -358,16 +375,24 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   drawStatus(state) {
-    this.cx.font = '20px Arial';
-    this.cx.fillStyle = 'black';
+    this.cx.font = 'bold 20px "Courier New"';
+    this.cx.fillStyle = 'white';
   
-    let levelText = `Level: ${state.level.name}`;
-    let scoreText = `Score: ${state.score}`;
-    let coinsCollectedText = `Coins Collected: ${state.coinsCollected}`;
+    let levelText = `Level: ${state.level.name}`.toLocaleUpperCase();
+    let scoreText = `Score: ${state.score}`.toLocaleUpperCase();
+    let coinsCollectedText = `Coins: ${state.coinsCollected}`.toLocaleUpperCase();
 
-    this.cx.fillText(levelText, 10, 30);
-    this.cx.fillText(scoreText, 10, 60);
-    this.cx.fillText(coinsCollectedText, 10, 90);
+    let levelTextWidth = this.cx.measureText(levelText).width;
+    let scoreTextWidth = this.cx.measureText(scoreText).width;
+    let coinsCollectedTextWidth = this.cx.measureText(coinsCollectedText).width;
+  
+    let levelTextPosition = (this.cx.canvas.width / 3 - levelTextWidth) / 2;
+    let scoreTextPosition = this.cx.canvas.width / 3 + (this.cx.canvas.width / 3 - scoreTextWidth) / 2;
+    let coinsCollectedTextPosition = this.cx.canvas.width / 3 * 2 + (this.cx.canvas.width / 3 - coinsCollectedTextWidth) / 2;
+  
+    this.cx.fillText(levelText, levelTextPosition, 30);
+    this.cx.fillText(scoreText, scoreTextPosition, 30);
+    this.cx.fillText(coinsCollectedText, coinsCollectedTextPosition, 30);
   }
 
   syncState(state) {
@@ -534,10 +559,10 @@ drawMonster(monster, x, y, width, height) {
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
   if (monster.isDead && monster.deadTime < 1.5) {
-    console.log("Drawing dead monster");
+    console.debug("Drawing dead monster");
     tile = 10;
   } else if (monster.speed.y != 0) {
-    tile = 9;
+    tile = 8;
   } else if (monster.speed.x != 0) {
     tile = Math.floor(Date.now() / 60) % 8;
   } else {
@@ -586,15 +611,18 @@ drawMonster(monster, x, y, width, height) {
       }
       else {
         let tileX = (actor.type == "coin" ? 2 : 1) * scale;
+        let spriteWidth = actor.type == "coin" ? width * 0.72 : width; 
+
+        console.debug(`Drawing ${actor.type} at (${x}, ${y}) with size (${width}, ${height}) from spritesheet position (${tileX}, 0)`);
         this.cx.drawImage(
           otherSprites,
           tileX,
           0,
-          width,
+          spriteWidth,
           height,
           x,
           y,
-          width,
+          spriteWidth,
           height
         );
       }
