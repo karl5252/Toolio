@@ -42,6 +42,7 @@ class Player {
     this.pos = pos;
     this.speed = speed;
     this.isDead = isDead;
+    this.interactable = true;
   }
 
   get type() {
@@ -61,14 +62,12 @@ Player.prototype.update = function(time, state, keys) {
   if (keys.ArrowRight) xSpeed += playerXSpeed;
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall")) {
-    pos = movedX;
+  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {    pos = movedX;
   }
 
   let ySpeed = this.speed.y + time * gravity;
   let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall")) {
-    pos = movedY;
+  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {    pos = movedY;
   } else if (keys.ArrowUp && ySpeed > 0) {
     ySpeed = -jumpSpeed;
   } else {
@@ -91,6 +90,7 @@ class Lava {
     this.pos = pos;
     this.speed = speed;
     this.reset = reset;
+    this.interactable = true;
   }
 
   get type() {
@@ -115,6 +115,7 @@ class Coin {
     this.pos = pos;
     this.basePos = basePos;
     this.wobble = wobble;
+    this.interactable = true;
   }
 
   get type() {
@@ -129,7 +130,7 @@ class Coin {
 
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  if (!state.level.touches(newPos, this.size, "wall")) {
+  if (!state.level.touches(newPos, this.size, "wall") || !state.level.touches(newPos, this.size, "stone")) {
     return new Lava(newPos, this.speed, this.reset);
   } else if (this.reset) {
     return new Lava(this.reset, this.speed, this.reset);
@@ -154,6 +155,7 @@ class Monster {
     this.pos = pos;
     this.speed = speed;
     this.isDead = isDead;
+    this.interactable = true;
     this.deadTime = deadTime || 0;
 
 
@@ -171,15 +173,17 @@ class Monster {
 Monster.prototype.size = new Vec(0.8, 1.5);
 
 Monster.prototype.update = function(time, state) {
-  let newPos = this.pos.plus(this.speed.times(time));
   if (this.isDead) {
     this.deadTime += time;
-    if (this.deadTime > 1) { // 1 second delay
-      let filtered = state.actors.filter(a => a != this);
-      return new State(state.level, filtered, state.status);
+    if (this.deadTime > 1.5) { // 1.5 seconds death animation
+      this.remove = true; // Mark the monster for removal
+    } 
+    return this; // Make the monster non-interactable
     }
-  }
-  if (!state.level.touches(newPos, this.size, "wall")) {
+
+  let newPos = this.pos.plus(this.speed.times(time));
+
+  if (!state.level.touches(newPos, this.size, "wall") || !state.level.touches(newPos, this.size, "stone")) {
     return new Monster(newPos, this.speed, this.isDead, this.deadTime);
   } else {
     return new Monster(this.pos, this.speed.times(-1), this.isDead, this.deadTime);
@@ -228,6 +232,7 @@ Level.prototype.touches = function(pos, size, type) {
       let isOutside = x < 0 || x >= this.width ||
                       y < 0 || y >= this.height;
       let here = isOutside ? "wall" : this.rows[y][x];
+      if (type === "wall" && (here === "wall" || here === "stone")) return true;
       if (here == type) return true;
     }
   }
@@ -236,7 +241,7 @@ Level.prototype.touches = function(pos, size, type) {
 
 function overlap(actor1, actor2) {
     // If either actor is dead, they don't overlap.
-    if (actor1.isDead || actor2.isDead) {
+    if (!actor1.interactable || !actor2.interactable) {
       return false;
     }
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
@@ -259,20 +264,18 @@ Coin.prototype.collide = function(state) {
 
 Monster.prototype.collide = function(state) {
   let player = state.player;
-  let status = state.status;
-  if (player.pos.y + player.size.y < this.pos.y + 0.5) {
-    //kill monster - set its isDead to true
-    this.isDead = true;
-    this.speed.x = 0;
-    console.log("Monster is stomped and dies");  //this is for debugging 
-    return new State(state.level, state.actors, status);
-  } else if (!this.isDead) {
-    let filtered = state.actors.filter(a => a != this);
-    return new State(state.level, filtered, "lost");
+  if (this.interactable && overlap(this, player)) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+      this.isDead = true;
+      this.interactable = false;
+      this.speed.x = 0;
+      return new State(state.level, state.actors, state.status);
+    } else {
+      return new State(state.level, state.actors.filter(a => a != this), "lost");
+    }
   }
-  return new State(state.level, state.actors, status);
+  return new State(state.level, state.actors, state.status);
 };
-
 
 class State {
   constructor(level, actors, status) {
@@ -291,7 +294,7 @@ class State {
 
   update(time, keys) {
     let actors = this.actors.map((actor) => actor.update(time, this, keys));
-    actors = actors.filter(actor => !actor.isDead || actor.type === 'player');
+    actors = actors.filter(actor => !actor.remove);
     let newState = new State(this.level, actors, this.status);
 
     if (newState.status != "playing") return newState;
@@ -525,7 +528,7 @@ drawMonster(monster, x, y, width, height) {
 
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
-  if (monster.isDead) {
+  if (monster.isDead && monster.deadTime < 1.5) {
     console.log("Drawing dead monster");
     tile = 10;
   } else if (monster.speed.y != 0) {
