@@ -130,7 +130,7 @@ class Coin {
 
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  if (!state.level.touches(newPos, this.size, "wall") || !state.level.touches(newPos, this.size, "stone")) {
+  if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {
     return new Lava(newPos, this.speed, this.reset);
   } else if (this.reset) {
     return new Lava(this.reset, this.speed, this.reset);
@@ -183,7 +183,7 @@ Monster.prototype.update = function(time, state) {
 
   let newPos = this.pos.plus(this.speed.times(time));
 
-  if (!state.level.touches(newPos, this.size, "wall") || !state.level.touches(newPos, this.size, "stone")) {
+  if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {
     return new Monster(newPos, this.speed, this.isDead, this.deadTime);
   } else {
     return new Monster(this.pos, this.speed.times(-1), this.isDead, this.deadTime);
@@ -333,15 +333,6 @@ var CanvasDisplay = class CanvasDisplay {
     parent.appendChild(this.canvas);
     this.cx = this.canvas.getContext("2d");
 
-    //add text element on the middle of the canvas
-    this.text = elt("div", {class: "text"});
-    this.text.innerText = "Press arrow keys to move";
-    parent.appendChild(this.text);
-    
-    //add element for coin counter
-    this.coinCounter = elt("div", {class: "coinCounter"});
-    parent.appendChild(this.coinCounter);
-
     this.flipPlayer = false;
 
     this.viewport = {
@@ -361,17 +352,8 @@ var CanvasDisplay = class CanvasDisplay {
     this.clearDisplay(state.status);
     this.drawBackground(state.level);
     this.drawActors(state.actors);
-    //update coin counter
-    this.coinCounter.innerText = `Coins: ${state.actors.filter(a => a.type == "coin").length}`;
 
-    // add element on the middle of the canvas with win message or loose message
-    if (state.status == "won") {
-      this.text.innerText = "You've won!";
-    } else if (state.status == "lost") {
-      this.text.innerText = "You've lost!";
-    } else {
-      this.text.innerText = "";
-    }
+
   }
 
   updateViewport(state) {
@@ -666,6 +648,19 @@ function trackKeys(keys) {
   window.addEventListener("keydown", track);
   window.addEventListener("keyup", track);
   return down;
+}
+
+function drawStatus(state, context) {
+  context.font = '20px Arial';
+  context.fillStyle = 'black';
+  
+  let levelText = `Level: ${state.level}`;
+  let scoreText = `Score: ${state.score}`;
+  let coinsCollectedText = `Coins Collected: ${state.coinsCollected}`;
+
+  context.fillText(levelText, 10, 30);
+  context.fillText(scoreText, 10, 60);
+  context.fillText(coinsCollectedText, 10, 90);
 }
 
 
