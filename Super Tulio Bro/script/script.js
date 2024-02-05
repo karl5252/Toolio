@@ -44,15 +44,22 @@ class Vec {
     return new Vec(this.x * factor, this.y * factor);
   }
 }
-
-class Player {
-  constructor(pos, speed, isDead = false) {
+class Actor {
+  constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
     this.speed = speed;
-    this.score = 0;
-    this.coinsCollected = 0;
     this.isDead = isDead;
     this.interactable = true;
+    this.deadTime = deadTime || 0;
+  }
+}
+
+class Player extends Actor {
+  constructor(pos, speed, isDead = false) {
+    super(pos, speed, isDead);
+    this.score = 0;
+    this.coinsCollected = 0;
+  
   }
 
   get type() {
@@ -67,33 +74,34 @@ class Player {
 Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
-  
   let xSpeed = 0;
   if (keys.ArrowLeft) xSpeed -= playerXSpeed;
   if (keys.ArrowRight) xSpeed += playerXSpeed;
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {    pos = movedX;
+  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
+    pos = movedX;
   }
 
   let ySpeed = this.speed.y + time * gravity;
   let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {    pos = movedY;
+  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
+    pos = movedY;
   } else if (keys.ArrowUp && ySpeed > 0) {
     ySpeed = -jumpSpeed;
   } else {
     ySpeed = 0;
   }
 
-
-  //add check on state lost if player is dead
-  if (state.status == "lost" && !this.isDead){
-    this.isDead = true;
-
-    return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
-  }else {
+  if (this.isDead) {
     return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
   }
+
+  if (state.level.touches(this.pos, this.size, "lava") || state.level.touches(this.pos, this.size, "Hoopa") || state.level.touches(this.pos, this.size, "KeggaTroopa")) {
+    this.isDead = true;
+  }
+
+  return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
 };
 
 class Lava {
@@ -160,14 +168,12 @@ Coin.prototype.update = function(time) {
                   this.basePos, wobble);
 };
 
+
+
 //add class Hoopa and its methods
-class Hoopa {
+class Hoopa extends Actor{
   constructor(pos, speed, isDead = false, deadTime = 0) {
-    this.pos = pos;
-    this.speed = speed;
-    this.isDead = isDead;
-    this.interactable = true;
-    this.deadTime = deadTime || 0;
+   super(pos, speed, isDead, deadTime);
   }
 
   get type() {
@@ -211,13 +217,9 @@ Hoopa.prototype.update = function(time, state) {
 };
 
 //add new class for second hoopa and its methods
-class KeggaTroopa {
+class KeggaTroopa extends Actor{
   constructor(pos, speed, isDead = false, deadTime = 0) {
-    this.pos = pos;
-    this.speed = speed;
-    this.isDead = isDead;
-    this.interactable = true;
-    this.deadTime = deadTime || 0;
+    super(pos, speed, isDead, deadTime);
   }
 
   get type() {
@@ -256,6 +258,16 @@ KeggaTroopa.prototype.update = function(time, state) {
   } else if (ySpeed > 0) {
     ySpeed = 0;
   }
+  //if (/* condition */) {
+    // Spawn a 'tripped over kegga'
+   // return new TrippedOverKegga(/* parameters */);
+ // }
+
+  // If the 'tripped over kegga' is sliding
+  //if (/* condition */) {
+    // Spawn a 'sliding kegga'
+  //  return new SlidingKegga(/* parameters */);
+ // }
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
 };
@@ -346,6 +358,8 @@ Hoopa.prototype.collide = function(state) {
       this.speed.x = 0;
       return new State(state.level, state.actors, state.status, state.coinsCollected);
     } else {
+      console.log("Player is dead");
+      player.isDead = true;0
       return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
     }
   }
@@ -361,6 +375,8 @@ KeggaTroopa.prototype.collide = function(state) {
       this.speed.x = 0;
       return new State(state.level, state.actors, state.status, state.coinsCollected);
     } else {
+      console.log("Player is dead");
+
       return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
     }
   }
@@ -772,7 +788,7 @@ drawKegga(keggaTroopa, x, y, width, height) {
         let tileX = (actor.type == "coin" ? 2 : 1) * scale;
         let spriteWidth = actor.type == "coin" ? width * 0.72 : width; 
 
-        console.debug(`Drawing ${actor.type} at (${x}, ${y}) with size (${width}, ${height}) from spritesheet position (${tileX}, 0)`);
+        //console.debug(`Drawing ${actor.type} at (${x}, ${y}) with size (${width}, ${height}) from spritesheet position (${tileX}, 0)`);
         this.cx.drawImage(
           otherSprites,
           tileX,
@@ -815,7 +831,7 @@ function runLevel(level, Display) {
   let ending = 1;
   return new Promise((resolve) => {
     runAnimation((time) => {
-      if (introShown) {
+      if (introShown & !state.player.isDead) {
         state.status = 'playing';
       } else {
         state.status = 'intro';
