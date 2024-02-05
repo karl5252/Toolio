@@ -13,12 +13,12 @@ var playerSprites = document.createElement("img");
 playerSprites.src = "img/player.png";
 var playerXOverlap = 4;
 
-var monsterSprites = document.createElement("img");
-monsterSprites.src = "img/monster.png";
+var hoopaSprites = document.createElement("img");
+hoopaSprites.src = "img/hoopa.png";
 var monsterXOverlap = 4;
 
 var keggaSprites = document.createElement("img");
-keggaSprites.src = "img/monster2.png";
+keggaSprites.src = "img/kegga.png";
 
 
 
@@ -161,7 +161,7 @@ Coin.prototype.update = function(time) {
 };
 
 //add class Monster and its methods
-class Monster {
+class Hoopa {
   constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
     this.speed = speed;
@@ -171,17 +171,17 @@ class Monster {
   }
 
   get type() {
-    return "monster";
+    return "hoopa";
   }
 
   static create(pos) {
-    return new Monster(pos.plus(new Vec(0, -0.5)), new Vec(2, 0));
+    return new Hoopa(pos.plus(new Vec(0, -0.5)), new Vec(2, 0));
   }
 }
 
-Monster.prototype.size = new Vec(0.8, 1.5);
+Hoopa.prototype.size = new Vec(0.8, 1.5);
 
-Monster.prototype.update = function(time, state) {
+Hoopa.prototype.update = function(time, state) {
   if (this.isDead) {
     this.deadTime += time;
     if (this.deadTime > 1.5) { // 1.5 seconds death animation
@@ -207,10 +207,10 @@ Monster.prototype.update = function(time, state) {
     ySpeed = 0;
   }
 
-  return new Monster(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
+  return new Hoopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
 };
 
-//add new class for second monster and its methods
+//add new class for second hoopa and its methods
 class KeggaTroopa {
   constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
@@ -270,7 +270,7 @@ var levelChars = {
   "=": Lava,
   "|": Lava,
   "v": Lava,
-  "m": Monster,
+  "m": Hoopa,
   "n": KeggaTroopa,
 };
 
@@ -337,7 +337,7 @@ Coin.prototype.collide = function(state) {
 };
 
 
-Monster.prototype.collide = function(state) {
+Hoopa.prototype.collide = function(state) {
   let player = state.player;
   if (this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
@@ -643,32 +643,32 @@ drawPlayer(player, x, y, width, height) {
 }
 
 /**
- * Draws the monster on the canvas.
+ * Draws the Hoopa on the canvas.
  *
- * @param {Monster} monster The monster object, which includes properties for speed.
- * @param {int} x The x-coordinate where the monster should be drawn.
- * @param {int} y The y-coordinate where the monster should be drawn.
- * @param {float} width The width of the monster's sprite.
- * @param {float} height The height of the monster's sprite.
+ * @param {Hoopa} hoopa The Hoopa object, which includes properties for speed.
+ * @param {int} x The x-coordinate where the Hoopa should be drawn.
+ * @param {int} y The y-coordinate where the Hoopa should be drawn.
+ * @param {float} width The width of the Hoopa's sprite.
+ * @param {float} height The height of the Hoopa's sprite.
  */
-drawMonster(monster, x, y, width, height) {
+drawHoopa(hoopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
   width += monsterXOverlap * 2;
   x -= monsterXOverlap;
 
   // Determine whether to flip the monster's sprite based on the monster's x speed.
-  if (monster.speed.x != 0) {
-    this.flipMonster = monster.speed.x < 0;
+  if (hoopa.speed.x != 0) {
+    this.flipMonster = hoopa.speed.x < 0;
   }
 
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
-  if (monster.isDead && monster.deadTime < 1.5) {
-    console.debug("Drawing dead monster");
+  if (hoopa.isDead && hoopa.deadTime < 1.5) {
+    console.debug("Drawing dead hoopa");
     tile = 10;
-  } else if (monster.speed.y != 0) {
+  } else if (hoopa.speed.y != 0) {
     tile = 8;
-  } else if (monster.speed.x != 0) {
+  } else if (hoopa.speed.x != 0) {
     tile = Math.floor(Date.now() / 60) % 8;
   } else {
     tile = 8;
@@ -677,7 +677,7 @@ drawMonster(monster, x, y, width, height) {
   // Save the current drawing state.
   this.cx.save();
 
-  // If the monster's sprite should be flipped, flip it horizontally.
+  // If the hoopa's sprite should be flipped, flip it horizontally.
   if (this.flipMonster) {
     this.flipHorizontally(x + width / 2);
   }
@@ -687,7 +687,7 @@ drawMonster(monster, x, y, width, height) {
 
   // Draw the chosen tile at the calculated position.
   this.cx.drawImage(
-    monsterSprites,
+    hoopaSprites,
     tileX,
     0,
     width,
@@ -762,8 +762,8 @@ drawKegga(keggaTroopa, x, y, width, height) {
       if (actor.type == "player") {
         this.drawPlayer(actor, x, y, width, height);
       }
-      else if (actor.type == "monster") {
-        this.drawMonster(actor, x, y, width, height);
+      else if (actor.type == "hoopa") {
+        this.drawHoopa(actor, x, y, width, height);
       }
       else if (actor.type == "keggaTroopa") {
         this.drawKegga(actor, x, y, width, height);
