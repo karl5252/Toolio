@@ -160,7 +160,7 @@ Coin.prototype.update = function(time) {
                   this.basePos, wobble);
 };
 
-//add class Monster and its methods
+//add class Hoopa and its methods
 class Hoopa {
   constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
