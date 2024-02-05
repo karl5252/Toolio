@@ -17,6 +17,10 @@ var monsterSprites = document.createElement("img");
 monsterSprites.src = "img/monster.png";
 var monsterXOverlap = 4;
 
+var keggaSprites = document.createElement("img");
+keggaSprites.src = "img/monster2.png";
+
+
 
 var arrowKeys = trackKeys([
   "ArrowLeft",
@@ -63,6 +67,7 @@ class Player {
 Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
+  
   let xSpeed = 0;
   if (keys.ArrowLeft) xSpeed -= playerXSpeed;
   if (keys.ArrowRight) xSpeed += playerXSpeed;
@@ -205,6 +210,56 @@ Monster.prototype.update = function(time, state) {
   return new Monster(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
 };
 
+//add new class for second monster and its methods
+class KeggaTroopa {
+  constructor(pos, speed, isDead = false, deadTime = 0) {
+    this.pos = pos;
+    this.speed = speed;
+    this.isDead = isDead;
+    this.interactable = true;
+    this.deadTime = deadTime || 0;
+  }
+
+  get type() {
+    return "keggaTroopa";
+  }
+
+  static create(pos) {
+    return new KeggaTroopa(pos.plus(new Vec(0, -0.5)), new Vec(2, 0));
+  }
+}
+
+KeggaTroopa.prototype.size = new Vec(0.8, 1.5);
+
+KeggaTroopa.prototype.update = function(time, state) {
+  if (this.isDead) {
+    this.deadTime += time;
+    if (this.deadTime > 1.5) { // 1.5 seconds death animation
+      this.remove = true; // Mark the monster for removal
+    } 
+    return this; // Make the monster non-interactable
+  }
+
+  let xSpeed = this.speed.x;
+  let ySpeed = this.speed.y + time * gravity;
+  let pos = this.pos;
+  let movedX = pos.plus(new Vec(xSpeed * time, 0));
+  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
+    pos = movedX;
+  } else {
+    xSpeed = -xSpeed; // Reverse direction when hitting a wall
+  }
+
+  let movedY = pos.plus(new Vec(0, ySpeed * time));
+  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
+    pos = movedY;
+  } else if (ySpeed > 0) {
+    ySpeed = 0;
+  }
+
+  return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
+};
+
 var levelChars = {
   ".": "empty",
   "%": "stone",
@@ -216,6 +271,7 @@ var levelChars = {
   "|": Lava,
   "v": Lava,
   "m": Monster,
+  "n": KeggaTroopa,
 };
 
 class Level {
@@ -282,6 +338,21 @@ Coin.prototype.collide = function(state) {
 
 
 Monster.prototype.collide = function(state) {
+  let player = state.player;
+  if (this.interactable && overlap(this, player)) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+      this.isDead = true;
+      this.interactable = false;
+      this.speed.x = 0;
+      return new State(state.level, state.actors, state.status, state.coinsCollected);
+    } else {
+      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+    }
+  }
+  return new State(state.level, state.actors, state.status, state.coinsCollected);
+};
+
+KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
   if (this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
@@ -631,6 +702,57 @@ drawMonster(monster, x, y, width, height) {
   this.cx.restore();
 }
 
+drawKegga(keggaTroopa, x, y, width, height) {
+  // Adjust the width and x-coordinate based on the monster's overlap.
+  width += monsterXOverlap * 2;
+  x -= monsterXOverlap;
+
+  // Determine whether to flip the monster's sprite based on the monster's x speed.
+  if (keggaTroopa.speed.x != 0) {
+    this.flipMonster = keggaTroopa.speed.x < 0;
+  }
+
+  // Choose a tile from the monster's sprite sheet based on the monster's speed.
+  let tile = 8;
+  if (keggaTroopa.isDead && keggaTroopa.deadTime < 1.5) {
+    console.debug("Drawing dead kegga monster");
+    tile = 10;
+  } else if (keggaTroopa.speed.y != 0) {
+    tile = 8;
+  } else if (keggaTroopa.speed.x != 0) {
+    tile = Math.floor(Date.now() / 60) % 8;
+  } else {
+    tile = 8;
+  }
+
+  // Save the current drawing state.
+  this.cx.save();
+
+  // If the monster's sprite should be flipped, flip it horizontally.
+  if (this.flipMonster) {
+    this.flipHorizontally(x + width / 2);
+  }
+
+  // Calculate the x-coordinate of the left edge of the tile on the sprite sheet.
+  let tileX = tile * width;
+
+  // Draw the chosen tile at the calculated position.
+  this.cx.drawImage(
+    keggaSprites,
+    tileX,
+    0,
+    width,
+    height,
+    x,
+    y,
+    width,
+    height
+  );
+
+  // Restore the saved drawing state.
+  this.cx.restore();
+}
+
   drawActors(actors) {
     for (let actor of actors) {
       let width = actor.size.x * scale;
@@ -642,6 +764,9 @@ drawMonster(monster, x, y, width, height) {
       }
       else if (actor.type == "monster") {
         this.drawMonster(actor, x, y, width, height);
+      }
+      else if (actor.type == "keggaTroopa") {
+        this.drawKegga(actor, x, y, width, height);
       }
       else {
         let tileX = (actor.type == "coin" ? 2 : 1) * scale;
