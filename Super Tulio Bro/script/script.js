@@ -218,8 +218,10 @@ Hoopa.prototype.update = function(time, state) {
 
 //add new class for second hoopa and its methods
 class KeggaTroopa extends Actor{
-  constructor(pos, speed, isDead = false, deadTime = 0) {
+  constructor(pos, speed, isDead = false, deadTime = 0, sliding = false, speedIncreased = false) {
     super(pos, speed, isDead, deadTime);
+    this.isSliding = sliding || false;
+    this.speedIncreased = speedIncreased || false;
   }
 
   get type() {
@@ -241,6 +243,12 @@ KeggaTroopa.prototype.update = function(time, state) {
     } 
     return this; // Make the monster non-interactable
   }
+  if (this.isSliding && !this.speedIncreased) {
+    this.isDead = false;
+    this.interactable = true;
+    this.speed.x = this.speed.x * 2;
+    this.speedIncreased = true;
+  }
 
   let xSpeed = this.speed.x;
   let ySpeed = this.speed.y + time * gravity;
@@ -258,18 +266,9 @@ KeggaTroopa.prototype.update = function(time, state) {
   } else if (ySpeed > 0) {
     ySpeed = 0;
   }
-  //if (/* condition */) {
-    // Spawn a 'tripped over kegga'
-   // return new TrippedOverKegga(/* parameters */);
- // }
 
-  // If the 'tripped over kegga' is sliding
-  //if (/* condition */) {
-    // Spawn a 'sliding kegga'
-  //  return new SlidingKegga(/* parameters */);
- // }
 
-  return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
+  return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
 
 var levelChars = {
@@ -371,9 +370,10 @@ KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
   if (this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
-      this.isDead = true;
-      this.interactable = false;
-      this.speed.x = 0;
+      this.isSliding = true;
+      console.log("is kegga sliding?: " + this.isSliding);
+      // make player jump a little
+      player.speed.y = -jumpSpeed / 1.5;
       return new State(state.level, state.actors, state.status, state.coinsCollected);
     } else {
       console.log("Player is dead");
@@ -731,8 +731,8 @@ drawKegga(keggaTroopa, x, y, width, height) {
 
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
-  if (keggaTroopa.isDead && keggaTroopa.deadTime < 1.5) {
-    console.debug("Drawing dead kegga monster");
+  if (keggaTroopa.isSliding && !keggaTroopa.isDead) {
+    console.debug("Drawing sliding kegga monster");
     tile = 10;
   } else if (keggaTroopa.speed.y != 0) {
     tile = 8;
