@@ -200,6 +200,7 @@ Hoopa.prototype.update = function(time, state) {
   let ySpeed = this.speed.y + time * gravity;
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
+
   if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
     pos = movedX;
   } else {
@@ -212,6 +213,10 @@ Hoopa.prototype.update = function(time, state) {
   } else if (ySpeed > 0) {
     ySpeed = 0;
   }
+  let slidingKegga = state.actors.find(actor => actor instanceof KeggaTroopa && actor.isSliding);
+if (slidingKegga && overlap(this, slidingKegga)) {
+  this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
+}
 
   return new Hoopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
 };
@@ -259,14 +264,16 @@ KeggaTroopa.prototype.update = function(time, state) {
   } else {
     xSpeed = -xSpeed; // Reverse direction when hitting a wall
   }
-
   let movedY = pos.plus(new Vec(0, ySpeed * time));
   if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
     pos = movedY;
   } else if (ySpeed > 0) {
     ySpeed = 0;
   }
-
+  let slidingKegga = state.actors.find(actor => actor instanceof KeggaTroopa && actor !==this && actor.isSliding);
+  if (slidingKegga && overlap(this, slidingKegga)) {
+    this.isDead = true; // Kill the KeggaTroopa if it collides with a sliding KeggaTroopa
+  }
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
@@ -325,6 +332,12 @@ function overlap(actor1, actor2) {
     if (!actor1.interactable || !actor2.interactable) {
       return false;
     }
+    if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
+    (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
+  console.debug("kegga is sliding and overlaps with hoppa");
+} 
+ 
+
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
@@ -351,25 +364,38 @@ Coin.prototype.collide = function(state) {
 
 Hoopa.prototype.collide = function(state) {
   let player = state.player;
-  if (this.interactable && overlap(this, player)) {
+  if (!this.isDead && this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
-      return new State(state.level, state.actors, state.status, state.coinsCollected);
     } else {
       console.log("Player is dead");
       player.isDead = true;
-      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+      state.actors = state.actors.filter(a => a != this);
+      state.status = "lost";
     }
   }
+  let slidingKegga = state.actors.find(actor => {
+    if (actor instanceof KeggaTroopa && actor.isSliding) {
+      console.log('Sliding KeggaTroopa:', actor);
+      return overlap(this, actor);
+    }
+  });
+  if (slidingKegga) {
+    console.log("Hoopa collided with sliding KeggaTroopa");
+    this.speed.y = -jumpSpeed / 1.5;
+    //flip sprite on y
+    this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
+  }
+
   return new State(state.level, state.actors, state.status, state.coinsCollected);
 };
 
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
   if (this.interactable && overlap(this, player)) {
-    if (player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.1 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
       this.isSliding = true;
       console.log("is kegga sliding?: " + this.isSliding);
       // make player jump a little
@@ -381,6 +407,7 @@ KeggaTroopa.prototype.collide = function(state) {
       return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
     }
   }
+
   return new State(state.level, state.actors, state.status, state.coinsCollected);
 };
 
@@ -418,6 +445,16 @@ class State {
         newState = actor.collide(newState);
       }
     }
+    let keggasAndHoopas = actors.filter(actor => actor instanceof KeggaTroopa || actor instanceof Hoopa);
+
+for (let i = 0; i < keggasAndHoopas.length; i++) {
+  for (let j = i + 1; j < keggasAndHoopas.length; j++) {
+    if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
+      // Handle collision between keggasAndHoopas[i] and keggasAndHoopas[j]
+    }
+  }
+}
+
     //console.log("coinsCollected: ", newState.coinsCollected);
     return newState;
   }
