@@ -345,6 +345,7 @@ function overlap(actor1, actor2) {
 }
 
 Lava.prototype.collide = function(state) {
+  let player = state.player;
   player.isDead = true;
   return new State(state.level, state.actors, "lost", this.coinsCollected);
 };
@@ -451,12 +452,9 @@ class State {
 for (let i = 0; i < keggasAndHoopas.length; i++) {
   for (let j = i + 1; j < keggasAndHoopas.length; j++) {
     if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
-      // Handle collision between keggasAndHoopas[i] and keggasAndHoopas[j]
     }
   }
 }
-
-    //console.log("coinsCollected: ", newState.coinsCollected);
     return newState;
   }
 }
