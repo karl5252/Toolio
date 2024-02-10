@@ -365,7 +365,7 @@ Coin.prototype.collide = function(state) {
 Hoopa.prototype.collide = function(state) {
   let player = state.player;
   if (!this.isDead && this.interactable && overlap(this, player)) {
-    if (player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5){//(player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
@@ -383,7 +383,7 @@ Hoopa.prototype.collide = function(state) {
     }
   });
   if (slidingKegga) {
-    console.log("Hoopa collided with sliding KeggaTroopa");
+    console.debug("Hoopa collided with sliding KeggaTroopa");
     this.speed.y = -jumpSpeed / 1.5;
     //flip sprite on y
     this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
@@ -395,12 +395,13 @@ Hoopa.prototype.collide = function(state) {
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
   if (this.interactable && overlap(this, player)) {
-    if (player.pos.y + player.size.y < this.pos.y + 0.1 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5){//(player.pos.y + player.size.y < this.pos.y + 0.1 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
       this.isSliding = true;
       console.log("is kegga sliding?: " + this.isSliding);
       // make player jump a little
       player.speed.y = -jumpSpeed / 1.5;
       return new State(state.level, state.actors, state.status, state.coinsCollected);
+
     } else {
       console.log("Player is dead");
       player.isDead = true;
