@@ -1,6 +1,6 @@
 var playerXSpeed = 7;
 var gravity = 30;
-var jumpSpeed = 17;
+var jumpSpeed = 15;
 const scale = 20;
 let paused = false;
 
@@ -92,8 +92,15 @@ Player.prototype.update = function(time, state, keys) {
   } else {
     ySpeed = 0;
   }
+  if (!this.isDead) {
+    jumpSpeed = 15;
+    playerXSpeed = 7;
+    return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
+  }
 
   if (this.isDead) {
+    jumpSpeed = 0;
+    playerXSpeed = 0;
     return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
   }
 
@@ -213,10 +220,11 @@ Hoopa.prototype.update = function(time, state) {
   } else if (ySpeed > 0) {
     ySpeed = 0;
   }
-  let slidingKegga = state.actors.find(actor => actor instanceof KeggaTroopa && actor.isSliding);
-if (slidingKegga && overlap(this, slidingKegga)) {
-  this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
-}
+  let slidingKeggas = state.actors.filter(actor => actor instanceof KeggaTroopa && actor !== this && actor.isSliding && overlap(this, actor));
+
+  slidingKeggas.forEach(slidingKegga => {
+    this.isDead = true; // Kill the KeggaTroopa if it collides with a sliding KeggaTroopa
+  });
 
   return new Hoopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
 };
@@ -270,10 +278,11 @@ KeggaTroopa.prototype.update = function(time, state) {
   } else if (ySpeed > 0) {
     ySpeed = 0;
   }
-  let slidingKegga = state.actors.find(actor => actor instanceof KeggaTroopa && actor !==this && actor.isSliding);
-  if (slidingKegga && overlap(this, slidingKegga)) {
+  let slidingKeggas = state.actors.filter(actor => actor instanceof KeggaTroopa && actor !== this && actor.isSliding && overlap(this, actor));
+
+  slidingKeggas.forEach(slidingKegga => {
     this.isDead = true; // Kill the KeggaTroopa if it collides with a sliding KeggaTroopa
-  }
+  });
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
@@ -334,8 +343,12 @@ function overlap(actor1, actor2) {
     }
     if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
     (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
-  console.debug("kegga is sliding and overlaps with hoppa");
+  console.log("kegga is sliding and overlaps with hoppa");
 } 
+if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
+  actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
+  console.log("kegga is sliding and overlaps with another kegga");
+  }
  
 
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
