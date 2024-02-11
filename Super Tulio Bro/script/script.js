@@ -142,6 +142,7 @@ class Coin {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
+    this.pointValue = 10;
   }
 
   get type() {
@@ -181,6 +182,7 @@ Coin.prototype.update = function(time) {
 class Hoopa extends Actor{
   constructor(pos, speed, isDead = false, deadTime = 0) {
    super(pos, speed, isDead, deadTime);
+   this.pointValue = 300;
   }
 
   get type() {
@@ -235,6 +237,7 @@ class KeggaTroopa extends Actor{
     super(pos, speed, isDead, deadTime);
     this.isSliding = sliding || false;
     this.speedIncreased = speedIncreased || false;
+    this.pointValue = 500;
   }
 
   get type() {
@@ -372,17 +375,20 @@ Coin.prototype.collide = function(state) {
   console.debug("updating the coin counter on collision with coin");
   let coinsCollected = state.coinsCollected + 1;
 
-  return new State(state.level, filtered, status, coinsCollected);
+  return new State(state.level, filtered, status, coinsCollected, state.score += this.pointValue);
 };
 
 
 Hoopa.prototype.collide = function(state) {
   let player = state.player;
+  let points = 0;
   if (!this.isDead && this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5){//(player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
+      let newScore = state.score + this.pointValue; // Create a new score variable
+
     } else {
       console.log("Player is dead");
       player.isDead = true;
@@ -401,9 +407,11 @@ Hoopa.prototype.collide = function(state) {
     this.speed.y = -jumpSpeed / 1.5;
     //flip sprite on y
     this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
+    let newScore = state.score + this.pointValue; // Create a new score variable
+
   }
 
-  return new State(state.level, state.actors, state.status, state.coinsCollected);
+  return new State(state.level, state.actors, state.status, state.coinsCollected, newScore);
 };
 
 KeggaTroopa.prototype.collide = function(state) {
@@ -414,7 +422,8 @@ KeggaTroopa.prototype.collide = function(state) {
       console.log("is kegga sliding?: " + this.isSliding);
       // make player jump a little
       player.speed.y = -jumpSpeed / 1.5;
-      return new State(state.level, state.actors, state.status, state.coinsCollected);
+      state.score += this.pointValue
+      return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
 
     } else {
       console.log("Player is dead");
@@ -423,20 +432,21 @@ KeggaTroopa.prototype.collide = function(state) {
     }
   }
 
-  return new State(state.level, state.actors, state.status, state.coinsCollected);
+  return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
 };
 
 class State {
-  constructor(level, actors, status, coinsCollected = 0) {
+  constructor(level, actors, status, coinsCollected = 0, score = 0) {
     this.level = level;
     this.actors = actors;
     this.status = status;
 
     this.coinsCollected = coinsCollected;
+    this.score = score;
   }
 
   static start(level) {
-    return new State(level, level.startActors, "playing", this.coinsCollected);
+    return new State(level, level.startActors, "playing", this.coinsCollected, this.score);
   }
 
   get player() {
@@ -446,13 +456,13 @@ class State {
   update(time, keys) {
     let actors = this.actors.map((actor) => actor.update(time, this, keys));
     actors = actors.filter(actor => !actor.remove);
-    let newState = new State(this.level, actors, this.status, this.coinsCollected);
+    let newState = new State(this.level, actors, this.status, this.coinsCollected, this.score);
 
     if (newState.status != "playing") return newState;
 
     let player = newState.player;
     if (this.level.touches(player.pos, player.size, "lava")) {
-      return new State(this.level, actors, "lost", this.coinsCollected);
+      return new State(this.level, actors, "lost", this.coinsCollected, this.score);
     }
 
     for (let actor of actors) {
@@ -633,7 +643,7 @@ var CanvasDisplay = class CanvasDisplay {
         if (tile == "lava") {
           tileX = scale;
         } else if (tile == "stone") {
-          tileX = 3.5 * scale; // Change this to the x-coordinate of the new texture in your spritesheet
+          tileX = 3.55 * scale; // Change this to the x-coordinate of the new texture in your spritesheet
         } else {
           tileX = 0;
         }
