@@ -387,7 +387,7 @@ Hoopa.prototype.collide = function(state) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
-      let newScore = state.score + this.pointValue; // Create a new score variable
+      points = state.score + this.pointValue; // Create a new score variable
 
     } else {
       console.log("Player is dead");
@@ -407,32 +407,36 @@ Hoopa.prototype.collide = function(state) {
     this.speed.y = -jumpSpeed / 1.5;
     //flip sprite on y
     this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
-    let newScore = state.score + this.pointValue; // Create a new score variable
+    points = state.score + this.pointValue; // Create a new score variable
 
   }
 
-  return new State(state.level, state.actors, state.status, state.coinsCollected, newScore);
+  return new State(state.level, state.actors, state.status, state.coinsCollected, points);
 };
 
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
+  let points = 0; // Define points variable
   if (this.interactable && overlap(this, player)) {
-    if (player.pos.y + player.size.y < this.pos.y + 0.5){//(player.pos.y + player.size.y < this.pos.y + 0.1 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
       console.log("is kegga sliding?: " + this.isSliding);
-      // make player jump a little
       player.speed.y = -jumpSpeed / 1.5;
-      state.score += this.pointValue
       return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
-
-    } else {
-      console.log("Player is dead");
-      player.isDead = true;
-      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+    } else if (!this.isDead && this.interactable && overlap(this, player)) {
+      if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+        this.isDead = true;
+        this.interactable = false;
+        this.speed.x = 0;
+        points = state.score + this.pointValue; // Update points variable
+      } else {
+        console.log("Player is dead");
+        player.isDead = true;
+        return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+      } 
     }
   }
-
-  return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
+  return new State(state.level, state.actors, state.status, state.coinsCollected, points); // Use points variable
 };
 
 class State {
@@ -793,11 +797,14 @@ drawKegga(keggaTroopa, x, y, width, height) {
   if (keggaTroopa.isSliding && !keggaTroopa.isDead) {
     console.debug("Drawing sliding kegga monster");
     tile = 10;
+  } else if (keggaTroopa.isDead && keggaTroopa.deadTime < 1.5) {
+    console.debug("Drawing dead kegga monster");
+    tile = 9;
   } else if (keggaTroopa.speed.y != 0) {
     tile = 8;
   } else if (keggaTroopa.speed.x != 0) {
     tile = Math.floor(Date.now() / 60) % 8;
-  } else {
+   } else {
     tile = 8;
   }
 
@@ -964,7 +971,3 @@ function trackKeys(keys) {
   return down;
 }
 
-
-
-
-//runGame([simpleLevelPlan], CanvasDisplay);
