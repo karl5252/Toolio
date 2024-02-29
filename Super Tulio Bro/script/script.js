@@ -1,24 +1,25 @@
-var playerXSpeed = 7;
-var gravity = 30;
-var jumpSpeed = 15;
-const scale = 20;
+const gameSettings = {
+  playerXSpeed: 7,
+  gravity: 30,
+  jumpSpeed: 15,
+  scale: 20,
+  actorXOverlap: 4,
+};
 let paused = false;
 
 let introShown = false;
 
-var otherSprites = document.createElement("img");
-otherSprites.src = "img/sprites.png";
+function createSprite(src) {
+  let sprite = document.createElement("img");
+  sprite.src = src;
+  return sprite;
+}
 
-var playerSprites = document.createElement("img");
-playerSprites.src = "img/player.png";
-var playerXOverlap = 4;
+var otherSprites = createSprite("img/sprites.png");
+var playerSprites = createSprite("img/player.png");
+var hoopaSprites = createSprite("img/hoopa.png");
+var keggaSprites = createSprite("img/kegga.png");
 
-var hoopaSprites = document.createElement("img");
-hoopaSprites.src = "img/hoopa.png";
-var monsterXOverlap = 4;
-
-var keggaSprites = document.createElement("img");
-keggaSprites.src = "img/kegga.png";
 
 
 
@@ -75,32 +76,32 @@ Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
-  if (keys.ArrowLeft) xSpeed -= playerXSpeed;
-  if (keys.ArrowRight) xSpeed += playerXSpeed;
+  if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
+  if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
   if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
     pos = movedX;
   }
 
-  let ySpeed = this.speed.y + time * gravity;
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
   let movedY = pos.plus(new Vec(0, ySpeed * time));
   if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
     pos = movedY;
   } else if (keys.ArrowUp && ySpeed > 0) {
-    ySpeed = -jumpSpeed;
+    ySpeed = -gameSettings.jumpSpeed;
   } else {
     ySpeed = 0;
   }
   if (!this.isDead) {
-    jumpSpeed = 15;
-    playerXSpeed = 7;
+    gameSettings.jumpSpeed = 15;
+    gameSettings.playerXSpeed = 7;
     return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
   }
 
   if (this.isDead) {
-    jumpSpeed = 0;
-    playerXSpeed = 0;
+    gameSettings.jumpSpeed = 0;
+    gameSettings.playerXSpeed = 0;
     return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
   }
 
@@ -206,7 +207,7 @@ Hoopa.prototype.update = function(time, state) {
   }
 
   let xSpeed = this.speed.x;
-  let ySpeed = this.speed.y + time * gravity;
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
 
@@ -267,7 +268,7 @@ KeggaTroopa.prototype.update = function(time, state) {
   }
 
   let xSpeed = this.speed.x;
-  let ySpeed = this.speed.y + time * gravity;
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
   let pos = this.pos;
   let movedX = pos.plus(new Vec(xSpeed * time, 0));
   if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
@@ -404,7 +405,7 @@ Hoopa.prototype.collide = function(state) {
   });
   if (slidingKegga) {
     console.debug("Hoopa collided with sliding KeggaTroopa");
-    this.speed.y = -jumpSpeed / 1.5;
+    this.speed.y = -gameSettings.jumpSpeed / 1.5;
     //flip sprite on y
     this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
     points = state.score + this.pointValue; // Create a new score variable
@@ -421,7 +422,7 @@ KeggaTroopa.prototype.collide = function(state) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
       console.log("is kegga sliding?: " + this.isSliding);
-      player.speed.y = -jumpSpeed / 1.5;
+      player.speed.y = -gameSettings.jumpSpeed / 1.5;
       return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
     } else if (!this.isDead && this.interactable && overlap(this, player)) {
       if (player.pos.y + player.size.y < this.pos.y + 0.5) {
@@ -508,8 +509,8 @@ var CanvasDisplay = class CanvasDisplay {
     }else{
       console.debug("creating new canvas");
       this.canvas = document.createElement("canvas");
-      this.canvas.width = Math.min(800, level.width * scale);
-      this.canvas.height = Math.min(600, level.height * scale);
+      this.canvas.width = Math.min(800, level.width * gameSettings.scale);
+      this.canvas.height = Math.min(600, level.height * gameSettings.scale);
       parent.appendChild(this.canvas);
     }
     this.cx = this.canvas.getContext("2d");
@@ -519,8 +520,8 @@ var CanvasDisplay = class CanvasDisplay {
     this.viewport = {
       left: 0,
       top: 0,
-      width: this.canvas.width / scale,
-      height: this.canvas.height / scale,
+      width: this.canvas.width / gameSettings.scale,
+      height: this.canvas.height / gameSettings.scale,
     };
   }
 
@@ -640,14 +641,14 @@ var CanvasDisplay = class CanvasDisplay {
       for (let x = xStart; x < xEnd; x++) {
         let tile = level.rows[y][x];
         if (tile == "empty") continue;
-        let screenX = (x - left) * scale;
-        let screenY = (y - top) * scale;
+        let screenX = (x - left) * gameSettings.scale;
+        let screenY = (y - top) * gameSettings.scale;
         //let tileX = tile == "lava" ? scale : 0;
         let tileX;
         if (tile == "lava") {
-          tileX = scale;
+          tileX = gameSettings.scale;
         } else if (tile == "stone") {
-          tileX = 3.55 * scale; // Change this to the x-coordinate of the new texture in your spritesheet
+          tileX = 3.55 * gameSettings.scale; // Change this to the x-coordinate of the new texture in your spritesheet
         } else {
           tileX = 0;
         }
@@ -655,12 +656,12 @@ var CanvasDisplay = class CanvasDisplay {
           otherSprites,
           tileX,
           0,
-          scale,
-          scale,
+          gameSettings.scale,
+          gameSettings.scale,
           screenX,
           screenY,
-          scale,
-          scale
+          gameSettings.scale,
+          gameSettings.scale
         );
       }
     }
@@ -676,8 +677,8 @@ var CanvasDisplay = class CanvasDisplay {
  */
 drawPlayer(player, x, y, width, height) {
   // Adjust the width and x-coordinate based on the player's overlap.
-  width += playerXOverlap * 2;
-  x -= playerXOverlap;
+  width += gameSettings.actorXOverlap * 2;
+  x -= gameSettings.actorXOverlap;
 
   // Determine whether to flip the player's sprite based on the player's x speed.
   if (player.speed.x != 0) {
@@ -733,8 +734,8 @@ drawPlayer(player, x, y, width, height) {
  */
 drawHoopa(hoopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
-  width += monsterXOverlap * 2;
-  x -= monsterXOverlap;
+  width += gameSettings.actorXOverlap * 2;
+  x -= gameSettings.actorXOverlap;
 
   // Determine whether to flip the monster's sprite based on the monster's x speed.
   if (hoopa.speed.x != 0) {
@@ -784,8 +785,8 @@ drawHoopa(hoopa, x, y, width, height) {
 
 drawKegga(keggaTroopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
-  width += monsterXOverlap * 2;
-  x -= monsterXOverlap;
+  width += gameSettings.actorXOverlap * 2;
+  x -= gameSettings.actorXOverlap;
 
   // Determine whether to flip the monster's sprite based on the monster's x speed.
   if (keggaTroopa.speed.x != 0) {
@@ -838,10 +839,10 @@ drawKegga(keggaTroopa, x, y, width, height) {
 
   drawActors(actors) {
     for (let actor of actors) {
-      let width = actor.size.x * scale;
-      let height = actor.size.y * scale;
-      let x = (actor.pos.x - this.viewport.left) * scale;
-      let y = (actor.pos.y - this.viewport.top) * scale;
+      let width = actor.size.x * gameSettings.scale;
+      let height = actor.size.y * gameSettings.scale;
+      let x = (actor.pos.x - this.viewport.left) * gameSettings.scale;
+      let y = (actor.pos.y - this.viewport.top) * gameSettings.scale;
       if (actor.type == "player") {
         this.drawPlayer(actor, x, y, width, height);
       }
@@ -852,7 +853,7 @@ drawKegga(keggaTroopa, x, y, width, height) {
         this.drawKegga(actor, x, y, width, height);
       }
       else {
-        let tileX = (actor.type == "coin" ? 2 : 1) * scale;
+        let tileX = (actor.type == "coin" ? 2 : 1) * gameSettings.scale;
         let spriteWidth = actor.type == "coin" ? width * 0.72 : width; 
 
         //console.debug(`Drawing ${actor.type} at (${x}, ${y}) with size (${width}, ${height}) from spritesheet position (${tileX}, 0)`);
@@ -914,7 +915,7 @@ function runLevel(level, Display) {
         display.drawIntro();
 
         // Add keydown listener for the ENTER key to start the game
-        window.addEventListener('keydown', function(event) {
+        window.addEventListener("keydown", (event) =>  {
           console.log('Key pressed:', event.key); // Log the key that was pressed
           if (event.key === 'Enter') {
             console.log('ENTER key pressed'); // Log when the ENTER key is pressed
