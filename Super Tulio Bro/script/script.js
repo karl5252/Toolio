@@ -4,10 +4,15 @@ const gameSettings = {
   jumpSpeed: 15,
   scale: 20,
   actorXOverlap: 4,
+  canvasWidth: 800,
+  canvasHeight: 600,
 };
 let paused = false;
-
 let introShown = false;
+let totalDeaths = 0;
+let totalScore = 0;
+let scorePerLevel = 0; // Reset this at the start of each level
+
 
 function createSprite(src) {
   let sprite = document.createElement("img");
@@ -404,19 +409,24 @@ if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaT
 Lava.prototype.collide = function(state) {
   let player = state.player;
   player.isDead = true;
+  totalDeaths += 1;
+  //totalScore = Math.max(0, totalScore - 50);
   return new State(state.level, state.actors, "lost", this.coinsCollected);
 };
 
 Coin.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
   let status = state.status;
+  let points = 0;
   if (!filtered.some(a => a.type == "coin")) status = "won";
 
   // Increment coinsCollected property of the State class
   console.debug("updating the coin counter on collision with coin");
   let coinsCollected = state.coinsCollected + 1;
+  points = state.score + this.pointValue; // Create a new score variable
+  scorePerLevel += points;
 
-  return new State(state.level, filtered, status, coinsCollected, state.score += this.pointValue);
+  return new State(state.level, filtered, status, coinsCollected, points);
 };
 
 
@@ -429,10 +439,13 @@ Hoopa.prototype.collide = function(state) {
       this.interactable = false;
       this.speed.x = 0;
       points = state.score + this.pointValue; // Create a new score variable
+      scorePerLevel += points;
 
     } else {
       console.log("Player is dead");
       player.isDead = true;
+      totalDeaths += 1;
+      //totalScore = Math.max(0, totalScore - 50);
       state.actors = state.actors.filter(a => a != this);
       state.status = "lost";
     }
@@ -449,6 +462,7 @@ Hoopa.prototype.collide = function(state) {
     //flip sprite on y
     this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
     points = state.score + this.pointValue; // Create a new score variable
+    scorePerLevel += points;
 
   }
 
@@ -458,6 +472,7 @@ Hoopa.prototype.collide = function(state) {
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
   let points = 0; // Define points variable
+  //scorePerLevel +=
   if (this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
@@ -470,9 +485,12 @@ KeggaTroopa.prototype.collide = function(state) {
         this.interactable = false;
         this.speed.x = 0;
         points = state.score + this.pointValue; // Update points variable
+        scorePerLevel += points;
       } else {
         console.log("Player is dead");
         player.isDead = true;
+        totalDeaths += 1;
+        //totalScore = Math.max(0, totalScore - 50);
         return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
       } 
     }
@@ -540,23 +558,25 @@ function elt(name, attrs, ...children) {
 }
 
 var CanvasDisplay = class CanvasDisplay {
-  constructor(parent, level) {
+  constructor(parent) {
+    // Find or create the canvas element
     let existingCanvas = document.querySelector("canvas");
     console.debug("existingCanvas: ", existingCanvas);
-    if (existingCanvas){
+    if (existingCanvas) {
       this.canvas = existingCanvas;
-      //this.canvas.getContext('2d').clearRect(0, 0, this.canvas.width, this.canvas.height);
-    }else{
+    } else {
       console.debug("creating new canvas");
       this.canvas = document.createElement("canvas");
-      this.canvas.width = Math.min(800, level.width * gameSettings.scale);
-      this.canvas.height = Math.min(600, level.height * gameSettings.scale);
       parent.appendChild(this.canvas);
     }
     this.cx = this.canvas.getContext("2d");
-
     this.flipPlayer = false;
+  }
 
+  initializeLevel(level) {
+    // Set canvas size based on level dimensions
+    this.canvas.width = Math.min(gameSettings.canvasWidth, level.width * gameSettings.scale);
+    this.canvas.height = Math.min(gameSettings.canvasHeight, level.height * gameSettings.scale);
     this.viewport = {
       left: 0,
       top: 0,
@@ -597,7 +617,11 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   drawIntro() {
-    console.log('Drawing intro screen');
+     // Set canvas size for the intro screen
+  this.canvas.width = gameSettings.canvasWidth; // or any other size suitable for the intro
+  this.canvas.height = gameSettings.canvasHeight; // or any other size suitable for the intro
+
+  console.log('Drawing intro screen');
 
     let cx = this.canvas.getContext('2d');
 
@@ -614,11 +638,27 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   drawOutro() {
-    this.cx.font = 'bold 20px "Courier New"';
+    this.clear(); // Clear the canvas
+  
+    // Draw outro messages
     this.cx.fillStyle = 'white';
-    this.cx.fillText("Game Over", 100, 100);
-    this.cx.fillText("Press any key to restart", 100, 150);
+    this.cx.textAlign = 'center';
+    let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
+    this.cx.fillText('Thanks for playing!', this.canvas.width / 2, 100);
+    this.cx.fillText(`Total score: ${finalScore}`, this.canvas.width / 2, 150);
+    this.cx.fillText(`Total deaths: ${totalDeaths}`, this.canvas.width / 2, 200);
+    this.cx.fillText('Press any key to restart', this.canvas.width / 2, 300);
+  
+    // Listen for any key to restart the game
+    window.addEventListener('keydown', () => {
+      // Reset global variables or reload the page for a full reset
+      totalDeaths = 0;
+      totalScore = 0;
+      scorePerLevel = 0;
+      runGame(gameLevels, CanvasDisplay); // Restart the game
+    }, { once: true });
   }
+  
 
   syncState(state) {
     console.log('Syncing game state:', state.status); 
@@ -631,11 +671,23 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   updateViewport(state) {
+    // Ensure the viewport is initialized before using it
+    if (!this.viewport || !this.viewport.width || !this.viewport.height) {
+      // Initialize with default values or based on the current level
+      // This is a fallback and should ideally be set correctly when the level is initialized
+      this.viewport = {
+        left: 0,
+        top: 0,
+        width: this.canvas.width / gameSettings.scale,
+        height: this.canvas.height / gameSettings.scale,
+      };
+    }
+  
     let view = this.viewport,
       margin = view.width / 3;
     let player = state.player;
     let center = player.pos.plus(player.size.times(0.5));
-
+  
     if (center.x < view.left + margin) {
       view.left = Math.max(center.x - margin, 0);
     } else if (center.x > view.left + view.width - margin) {
@@ -653,6 +705,7 @@ var CanvasDisplay = class CanvasDisplay {
       );
     }
   }
+  
 
   clearDisplay(status) {
     if (status == "won") {
@@ -671,26 +724,31 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   drawBackground(level) {
+    // Ensure the viewport is initialized before using it
+    if (!this.viewport || !this.viewport.width || !this.viewport.height) {
+      // Initialize with default values or based on the current level
+      // This is a fallback and should ideally be set correctly when the level is initialized
+      this.initializeLevel(level); // Call initializeLevel to set up the viewport based on the level
+    }
+  
     let { left, top, width, height } = this.viewport;
     let xStart = Math.floor(left);
     let xEnd = Math.ceil(left + width);
     let yStart = Math.floor(top);
     let yEnd = Math.ceil(top + height);
-
+  
     for (let y = yStart; y < yEnd; y++) {
       for (let x = xStart; x < xEnd; x++) {
+        if (y < 0 || y >= level.rows.length || x < 0 || x >= level.rows[y].length) {
+          continue; // Skip tiles outside the level bounds
+        }
         let tile = level.rows[y][x];
         if (tile == "empty") continue;
         let screenX = (x - left) * gameSettings.scale;
         let screenY = (y - top) * gameSettings.scale;
-        //let tileX = tile == "lava" ? scale : 0;
-        let tileX;
-        if (tile == "lava") {
-          tileX = gameSettings.scale;
-        } else if (tile == "stone") {
-          tileX = 3.55 * gameSettings.scale; // Change this to the x-coordinate of the new texture in your spritesheet
-        } else {
-          tileX = 0;
+        let tileX = (tile == "lava") ? gameSettings.scale : 0;
+        if (tile == "stone") {
+          tileX = 3.55 * gameSettings.scale; // Adjust for your spritesheet
         }
         this.cx.drawImage(
           otherSprites,
@@ -706,6 +764,7 @@ var CanvasDisplay = class CanvasDisplay {
       }
     }
   }
+  
 /**
  * Draws the player on the canvas.
  *
@@ -934,15 +993,18 @@ function runAnimation(frameFunc) {
 }
 
 function runLevel(level, Display) {
-  let display = new Display(document.body, level);
+  let display = new Display(document.body);
+  display.initializeLevel(level); // Initialize the level and set viewport dimensions
   let state = State.start(level);
   let ending = 1;
   return new Promise((resolve) => {
     runAnimation((time) => {
-      if (introShown & !state.player.isDead) {
+      if (introShown && !state.player.isDead) {
         state.status = 'playing';
-      } else {
+      } else if (!introShown) {
         state.status = 'intro';
+        display.drawIntro();
+        return false; // Stop the animation loop if still on the intro screen
       }
       state = state.update(time, arrowKeys);
       display.syncState(state);
@@ -951,26 +1013,6 @@ function runLevel(level, Display) {
       } else if (ending > 0) {
         ending -= time;
         return true;
-      } else if(state.status === "intro"){
-        display.drawIntro();
-
-        // Add keydown listener for the ENTER key to start the game
-        window.addEventListener("keydown", (event) =>  {
-          console.log('Key pressed:', event.key); // Log the key that was pressed
-          if (event.key === 'Enter') {
-            console.log('ENTER key pressed'); // Log when the ENTER key is pressed
-            //state = State.start(level);
-            introShown = true;
-            //state.status = "playing";
-            console.log('Game state after pressing ENTER:', state.status); // Log the game state after pressing ENTER
-
-            //state.score = 0;
-            //state.coinsCollected = 0;
-            resolve(state.status);
-          }
-        }, {once: true}); // The listener is removed after being invoked once
-
-        return false;
       } else {
         display.clear();
         resolve(state.status);
@@ -980,17 +1022,60 @@ function runLevel(level, Display) {
   });
 }
 
+
 async function runGame(plans, Display) {
-  for (let level = 0; level < plans.length; ) {
-    let status = await runLevel(
-      new Level(plans[level]),
-      Display
-    );
-    if (status == "won") level++;
+  // Display the intro screen first
+  let display = new CanvasDisplay(document.body);
+  display.drawIntro();
+
+  // Wait for the user to press 'Enter' to start the game
+  await new Promise(resolve => {
+      window.addEventListener("keydown", function handler(event) {
+          if (event.key === 'Enter') {
+              console.log('Game starting after intro...');
+              window.removeEventListener("keydown", handler);
+              resolve();
+          }
+      });
+  });
+
+  // Now start the game levels
+  for (let level = 0; level < plans.length;) {
+      let status = await runLevel(new Level(plans[level]), Display);
+      if (status == "won"){
+        totalScore += scorePerLevel;  //faield to load score
+        level++;
+      } 
   }
 
   console.log("You've won!");
+  display.drawOutro();
+
 }
+
+// Modify the runLevel function to not show the intro again
+function runLevel(level, Display) {
+  let display = new Display(document.body, level);
+  let state = State.start(level);
+  let ending = 1;
+  return new Promise((resolve) => {
+      runAnimation((time) => {
+          state = state.update(time, arrowKeys);
+          display.syncState(state);
+          if (state.status == "playing") {
+              return true;
+          } else if (ending > 0) {
+              ending -= time;
+              return true;
+          } else {
+              display.clear();
+              resolve(state.status);
+              return false;
+          }
+      });
+  });
+}
+
 
 function trackKeys(keys) {
   let down = Object.create(null);
