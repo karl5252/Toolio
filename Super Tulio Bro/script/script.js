@@ -84,26 +84,25 @@ class Player extends Actor {
 }
 
 Player.prototype.size = new Vec(0.8, 1.5);
-Player.prototype.update = function(time, state, keys) {
-  // Initialize horizontal speed based on arrow key input
-  let xSpeed = 0;
-  if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
-  if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
 
-  // Apply horizontal movement
+Player.prototype.update = function(time, state, keys) {
+  let xSpeed = 0;
+  // Prevent horizontal movement if the player is dead
+  if (!this.isDead) {
+    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
+    if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
+  }
+
+  // Apply horizontal movement only if the player is not dead
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (newPos.x !== this.pos.x) {
     this.pos = newPos; // Update position if horizontal movement occurred
   }
 
-  // Initialize vertical speed and apply gravity
   let ySpeed = this.speed.y + time * gameSettings.gravity;
 
-  // Determine if the player is on the ground to allow for jumping
-  let isOnGround = state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") || state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone");
-
   // Check for jump input and apply jump force if on the ground
-  if (keys.isPressed("ArrowUp") && !this.isDead && isOnGround) {
+  if (!this.isDead && keys.isPressed("ArrowUp") && this.isOnGround(state)) {
     ySpeed = -gameSettings.jumpSpeed;
   }
 
@@ -116,17 +115,20 @@ Player.prototype.update = function(time, state, keys) {
     this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
   }
 
-  // Check for harmful collisions (e.g., lava)
+  // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
+    // When player is marked as dead, make them drop to the ground
+    this.speed.y = gameSettings.gravity; // Set a positive ySpeed to simulate falling
   }
 
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead);
 };
 
-
-
-
+Player.prototype.isOnGround = function(state) {
+  return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone");
+};
 
 
 class Lava {
