@@ -20,6 +20,17 @@ var playerSprites = createSprite("img/player.png");
 var hoopaSprites = createSprite("img/hoopa.png");
 var keggaSprites = createSprite("img/kegga.png");
 
+function actorOverlap(actor1, actor2) {
+  // Check if either actor is non-interactable or if they are the same actor
+  if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
+      return false;
+  }
+
+  return actor1.pos.x + actor1.size.x > actor2.pos.x &&
+         actor1.pos.x < actor2.pos.x + actor2.size.x &&
+         actor1.pos.y + actor1.size.y > actor2.pos.y &&
+         actor1.pos.y < actor2.pos.y + actor2.size.y;
+}
 
 
 
@@ -73,44 +84,50 @@ class Player extends Actor {
 }
 
 Player.prototype.size = new Vec(0.8, 1.5);
-
 Player.prototype.update = function(time, state, keys) {
+  // Initialize horizontal speed based on arrow key input
   let xSpeed = 0;
   if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
   if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
-  let pos = this.pos;
-  let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
-    pos = movedX;
+
+  // Apply horizontal movement
+  let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
+  if (newPos.x !== this.pos.x) {
+    this.pos = newPos; // Update position if horizontal movement occurred
   }
 
+  // Initialize vertical speed and apply gravity
   let ySpeed = this.speed.y + time * gameSettings.gravity;
-  let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
-    pos = movedY;
-  } else if (keys.ArrowUp && ySpeed > 0) {
+
+  // Determine if the player is on the ground to allow for jumping
+  let isOnGround = state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") || state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone");
+
+  // Check for jump input and apply jump force if on the ground
+  if (keys.isPressed("ArrowUp") && !this.isDead && isOnGround) {
     ySpeed = -gameSettings.jumpSpeed;
+  }
+
+  // Apply vertical movement due to gravity or jump
+  newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
+  if (newPos.y !== this.pos.y) {
+    this.pos = newPos; // Update position if vertical movement occurred
+    this.speed.y = ySpeed; // Update vertical speed
   } else {
-    ySpeed = 0;
-  }
-  if (!this.isDead) {
-    gameSettings.jumpSpeed = 15;
-    gameSettings.playerXSpeed = 7;
-    return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
+    this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
   }
 
-  if (this.isDead) {
-    gameSettings.jumpSpeed = 0;
-    gameSettings.playerXSpeed = 0;
-    return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
-  }
-
-  if (state.level.touches(this.pos, this.size, "lava") || state.level.touches(this.pos, this.size, "Hoopa") || state.level.touches(this.pos, this.size, "KeggaTroopa")) {
+  // Check for harmful collisions (e.g., lava)
+  if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
   }
 
-  return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
+  return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead);
 };
+
+
+
+
+
 
 class Lava {
   constructor(pos, speed, reset) {
@@ -200,33 +217,37 @@ Hoopa.prototype.size = new Vec(0.8, 1.5);
 Hoopa.prototype.update = function(time, state) {
   if (this.isDead) {
     this.deadTime += time;
-    if (this.deadTime > 1.5) { // 1.5 seconds death animation
-      this.remove = true; // Mark the monster for removal
-    } 
-    return this; // Make the monster non-interactable
+    if (this.deadTime > 1.5) { // After 1.5 seconds of death animation, remove the Hoopa
+      this.remove = true;
+    }
+    return this; // Return early if Hoopa is dead, no further updates needed
   }
 
   let xSpeed = this.speed.x;
-  let ySpeed = this.speed.y + time * gameSettings.gravity;
   let pos = this.pos;
-  let movedX = pos.plus(new Vec(xSpeed * time, 0));
 
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
-    pos = movedX;
-  } else {
+  // Use moveActor for horizontal movement, reversing direction on collision
+  let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
+  if (pos.x === newPos.x) {
     xSpeed = -xSpeed; // Reverse direction when hitting a wall
+  } else {
+    pos = newPos;
   }
 
-  let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
-    pos = movedY;
-  } else if (ySpeed > 0) {
-    ySpeed = 0;
+  // Gravity affects vertical speed
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
+  newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
+  if (pos.y === newPos.y) {
+    ySpeed = 0; // Stop vertical movement if we hit something
+  } else {
+    pos = newPos;
   }
-  let slidingKeggas = state.actors.filter(actor => actor instanceof KeggaTroopa && actor !== this && actor.isSliding && overlap(this, actor));
 
-  slidingKeggas.forEach(slidingKegga => {
-    this.isDead = true; // Kill the KeggaTroopa if it collides with a sliding KeggaTroopa
+  // Check for collisions with sliding KeggaTroopas
+  state.actors.forEach(actor => {
+    if (actor instanceof KeggaTroopa && actor !== this && actor.isSliding && actorOverlap(this, actor)) {
+      this.isDead = true; // Hoopa dies if it collides with a sliding KeggaTroopa
+    }
   });
 
   return new Hoopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
@@ -255,41 +276,47 @@ KeggaTroopa.prototype.size = new Vec(0.8, 1.5);
 KeggaTroopa.prototype.update = function(time, state) {
   if (this.isDead) {
     this.deadTime += time;
-    if (this.deadTime > 1.5) { // 1.5 seconds death animation
-      this.remove = true; // Mark the monster for removal
-    } 
-    return this; // Make the monster non-interactable
+    if (this.deadTime > 1.5) { // After 1.5 seconds of death animation, remove the KeggaTroopa
+      this.remove = true;
+    }
+    return this; // Return early if KeggaTroopa is dead, no further updates needed
   }
+
   if (this.isSliding && !this.speedIncreased) {
-    this.isDead = false;
-    this.interactable = true;
-    this.speed.x = this.speed.x * 2;
+    this.speed.x *= 2; // Double the speed if sliding and speed hasn't been increased yet
     this.speedIncreased = true;
   }
 
   let xSpeed = this.speed.x;
-  let ySpeed = this.speed.y + time * gameSettings.gravity;
   let pos = this.pos;
-  let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
-    pos = movedX;
-  } else {
-    xSpeed = -xSpeed; // Reverse direction when hitting a wall
-  }
-  let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
-    pos = movedY;
-  } else if (ySpeed > 0) {
-    ySpeed = 0;
-  }
-  let slidingKeggas = state.actors.filter(actor => actor instanceof KeggaTroopa && actor !== this && actor.isSliding && overlap(this, actor));
 
-  slidingKeggas.forEach(slidingKegga => {
-    this.isDead = true; // Kill the KeggaTroopa if it collides with a sliding KeggaTroopa
+  // Use moveActor for horizontal movement, reversing direction on collision
+  let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
+  if (pos.x === newPos.x) {
+    xSpeed = -xSpeed; // Reverse direction when hitting a wall
+  } else {
+    pos = newPos;
+  }
+
+  // Gravity affects vertical speed
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
+  newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
+  if (pos.y === newPos.y) {
+    ySpeed = 0; // Stop vertical movement if we hit something
+  } else {
+    pos = newPos;
+  }
+
+  // Check for collisions with sliding KeggaTroopas
+  state.actors.forEach(actor => {
+    if (actor instanceof KeggaTroopa && actor !== this && actor.isSliding && actorOverlap(this, actor)) {
+      this.isDead = true; // KeggaTroopa dies if it collides with another sliding KeggaTroopa
+    }
   });
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
+
 
 var levelChars = {
   ".": "empty",
@@ -321,24 +348,35 @@ class Level {
       });
     });
   }
-}
-Level.prototype.touches = function(pos, size, type) {
-  let xStart = Math.floor(pos.x);
-  let xEnd = Math.ceil(pos.x + size.x);
-  let yStart = Math.floor(pos.y);
-  let yEnd = Math.ceil(pos.y + size.y);
 
-  for (let y = yStart; y < yEnd; y++) {
-    for (let x = xStart; x < xEnd; x++) {
-      let isOutside = x < 0 || x >= this.width ||
-                      y < 0 || y >= this.height;
-      let here = isOutside ? "wall" : this.rows[y][x];
-      if (type === "wall" && (here === "wall" || here === "stone")) return true;
-      if (here == type) return true;
+  touches(pos, size, type) {
+    let xStart = Math.floor(pos.x);
+    let xEnd = Math.ceil(pos.x + size.x);
+    let yStart = Math.floor(pos.y);
+    let yEnd = Math.ceil(pos.y + size.y);
+
+    for (let y = yStart; y < yEnd; y++) {
+      for (let x = xStart; x < xEnd; x++) {
+        let isOutside = x < 0 || x >= this.width || y < 0 || y >= this.height;
+        let here = isOutside ? "wall" : this.rows[y][x];
+        if (type === "wall" && (here === "wall" || here === "stone")) return true;
+        if (here == type) return true;
+      }
     }
+    return false;
   }
-  return false;
-};
+
+  // New method for moving an actor and checking for collisions
+  moveActor(actor, move, time) {
+    let newPos = actor.pos.plus(move.times(time));
+    if (!this.touches(newPos, actor.size, "wall") && !this.touches(newPos, actor.size, "stone")) {
+      return newPos; // New position is valid, no collision
+    }
+    return actor.pos; // Collision detected, return original position
+  }
+}
+
+
 
 function overlap(actor1, actor2) {
     // If either actor is dead, they don't overlap.
@@ -954,21 +992,29 @@ async function runGame(plans, Display) {
 
 function trackKeys(keys) {
   let down = Object.create(null);
+  let pressed = Object.create(null); // New object to track freshly pressed keys
+
   function track(event) {
-    
     if (keys.includes(event.key)) {
-      down[event.key] = event.type == "keydown";
+      let state = event.type == "keydown";
+      if (state && !down[event.key]) {
+        pressed[event.key] = true; // Mark as freshly pressed if it wasn't down before
+      }
+      down[event.key] = state;
       event.preventDefault();
     }
   }
   window.addEventListener("keydown", track);
   window.addEventListener("keyup", track);
-  window.addEventListener('keydown', function(event) {
-    if (event.key === 'p' || event.key === 'P') { // Replace 'p' with your pause key
-      paused = !paused;
-      console.debug("paused: ", paused);
+
+  down.isPressed = (key) => {
+    if (pressed[key]) {
+      pressed[key] = false; // Reset after acknowledging the press
+      return true;
     }
-  });
+    return false;
+  };
+
   return down;
 }
 
