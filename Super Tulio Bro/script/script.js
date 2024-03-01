@@ -39,6 +39,20 @@ function actorOverlap(actor1, actor2) {
          actor1.pos.y < actor2.pos.y + actor2.size.y;
 }
 
+function updatePoints(state, pointsToAdd) {
+  let newScore = state.score + pointsToAdd;
+  scorePerLevel += pointsToAdd; // Accumulate points for the current level
+  console.log(`Points updated. New score: ${newScore}, Score this level: ${scorePerLevel}`);
+  // Return a new state with the updated score
+  return new State(state.level, state.actors, state.status, state.coinsCollected, newScore);
+}
+
+
+function updateTotalScore() {
+  totalScore += scorePerLevel; // Add the score for the current level to the total score
+  console.log(`Total Score Updated: ${totalScore}`);
+  scorePerLevel = 0; // Reset score for the next level
+}
 
 
 var arrowKeys = trackKeys([
@@ -431,88 +445,95 @@ Lava.prototype.collide = function(state) {
 };
 
 Coin.prototype.collide = function(state) {
-  let filtered = state.actors.filter(a => a != this);
-  let status = state.status;
-  let points = 0;
-  //if (!filtered.some(a => a.type == "coin")) status = "won";
+  let filteredActors = state.actors.filter(a => a != this);
+  let newCoinsCollected = state.coinsCollected + 1;
+  let newState = updatePoints(state, this.pointValue);
 
-  // Increment coinsCollected property of the State class
-  console.debug("updating the coin counter on collision with coin");
-  let coinsCollected = state.coinsCollected + 1;
-  points = state.score + this.pointValue; // Create a new score variable
-  scorePerLevel += points;
+  console.debug(`Coin collected. Coins collected: ${newCoinsCollected}`);
 
-  return new State(state.level, filtered, status, coinsCollected, points);
+  return new State(newState.level, filteredActors, newState.status, newCoinsCollected, newState.score);
 };
+
 
 
 Hoopa.prototype.collide = function(state) {
   let player = state.player;
-  let points = 0;
+
   if (!this.isDead && this.interactable && overlap(this, player)) {
-    if (player.pos.y + player.size.y < this.pos.y + 0.5){//(player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+      // Hoopa is killed by the player
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
-      points = state.score + this.pointValue; // Create a new score variable
-      //scorePerLevel += points;
+      
+      // Update the state with points for killing Hoopa
+      let newState = updatePoints(state, this.pointValue);
+      console.debug(`Hoopa killed by player. Points added: ${this.pointValue}`);
 
+      return new State(newState.level, newState.actors, newState.status, newState.coinsCollected, newState.score);
     } else {
+      // Player dies on collision with Hoopa
       console.debug("Player is dead");
       player.isDead = true;
       totalDeaths += 1;
-      state.actors = state.actors.filter(a => a != this);
-      state.status = "lost";
+
+      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected, state.score);
     }
   }
-  let slidingKegga = state.actors.find(actor => {
-    if (actor instanceof KeggaTroopa && actor.isSliding) {
-      console.debug('Sliding KeggaTroopa:', actor);
-      return overlap(this, actor);
-    }
-  });
+
+  // Check for collision with a sliding KeggaTroopa
+  let slidingKegga = state.actors.find(actor => actor instanceof KeggaTroopa && actor.isSliding && overlap(this, actor));
   if (slidingKegga) {
     console.debug("Hoopa collided with sliding KeggaTroopa");
-    this.speed.y = -gameSettings.jumpSpeed / 1.5;
-    //flip sprite on y
-    this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
-    points = state.score + this.pointValue; // Create a new score variable
-    //scorePerLevel += points;
+    this.isDead = true; // Hoopa is killed by sliding KeggaTroopa
+    this.speed.y = -gameSettings.jumpSpeed / 1.5; // Add some bounce effect
 
+    // Update the state with points for Hoopa killed by KeggaTroopa
+    return updatePoints(state, this.pointValue);
   }
-  scorePerLevel += points;
-  return new State(state.level, state.actors, state.status, state.coinsCollected, points);
+
+  // No points update needed if no collision of interest occurred
+  return state;
 };
 
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
-  let points = 0; // Define points variable
-  //scorePerLevel +=
+
+  // KeggaTroopa is interactable and collides with the player
   if (this.interactable && overlap(this, player)) {
+    // Player jumps on top of KeggaTroopa, making it slide
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
-      console.debug("is kegga sliding?: " + this.isSliding);
-      player.speed.y = -gameSettings.jumpSpeed / 1.5;
+      console.debug("KeggaTroopa is sliding.");
+      player.speed.y = -gameSettings.jumpSpeed / 1.5; // Bounce effect
+
+      // No points update, just change in state
       return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
-    } else if (!this.isDead && this.interactable && overlap(this, player)) {
-      if (player.pos.y + player.size.y < this.pos.y + 0.5) {
-        this.isDead = true;
-        this.interactable = false;
-        this.speed.x = 0;
-        points = state.score + this.pointValue; // Update points variable
-        scorePerLevel += points;
-      } else {
-        console.debug("Player is dead");
-        player.isDead = true;
-        totalDeaths += 1;
-        //totalScore = Math.max(0, totalScore - 50);
-        return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
-      } 
+    } else {
+      // Player dies if it hits the KeggaTroopa from any side other than the top
+      console.debug("Player is dead");
+      player.isDead = true;
+      totalDeaths += 1;
+
+      // Remove the KeggaTroopa from the state and update status
+      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected, state.score);
     }
   }
 
-  return new State(state.level, state.actors, state.status, state.coinsCollected, points); // Use points variable
+  // Check for collision with another sliding KeggaTroopa
+  let slidingKeggaCollision = state.actors.find(actor => actor instanceof KeggaTroopa && actor.isSliding && actor !== this && overlap(this, actor));
+  if (slidingKeggaCollision) {
+    console.debug("KeggaTroopa collided with sliding KeggaTroopa");
+    this.isDead = true; // KeggaTroopa is killed by another sliding KeggaTroopa
+
+    // Update the state with points for KeggaTroopa killed by another KeggaTroopa
+    return updatePoints(state, this.pointValue);
+  }
+
+  // Return state unmodified if no relevant collision occurred
+  return state;
 };
+
 
 class State {
   constructor(level, actors, status, coinsCollected = 0, score = 0, exitReached = false) {
@@ -717,9 +738,9 @@ drawScreen(options) {
     });
   }
 
-  drawOutro() {
+  drawOutro(finalScore) {
     console.debug('Drawing outro screen');
-    let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
+    //let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
     this.drawScreen({
       messages: [
         'Thanks for playing!',
@@ -1094,18 +1115,19 @@ async function runGame(plans, Display) {
 
   // Now start the game levels
   for (let level = 0; level < plans.length;) {
-      let status = await runLevel(new Level(plans[level]), Display);
-      if (status == "won"){
-        totalScore += scorePerLevel;  //faield to load score
+    let status = await runLevel(new Level(plans[level]), Display);
+    if (status == "won") {
+        updateTotalScore(); // Update total score when a level is won
         levelCounter++;
         level++;
-      } 
-  }
-
-  console.debug("You've won!");
-  display.drawOutro();
-
+    } else if (status == "lost") {
+        // Handle game over scenario, maybe reset totalScore or offer a retry
+    }
 }
+
+console.log("You've won the game!");
+display.drawOutro(totalScore);
+};
 
 // Modify the runLevel function to not show the intro again
 function runLevel(level, Display) {
