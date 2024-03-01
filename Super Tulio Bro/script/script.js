@@ -291,7 +291,7 @@ KeggaTroopa.prototype.update = function(time, state) {
   }
 
   if (this.isSliding && !this.speedIncreased) {
-    this.speed.x *= 2; // Double the speed if sliding and speed hasn't been increased yet
+    this.speed.x *= 6; // Increase the speed if sliding and speed hasn't been increased yet
     this.speedIncreased = true;
   }
 
@@ -321,6 +321,17 @@ KeggaTroopa.prototype.update = function(time, state) {
       this.isDead = true; // KeggaTroopa dies if it collides with another sliding KeggaTroopa
     }
   });
+  // Check for collisions with other actors
+  state.actors.forEach(actor => {
+    if (actor !== this && this.isSliding && actorOverlap(this, actor)) {
+        if (actor instanceof Hoopa && !actor.isDead && !actor.hitByKegga) {
+            actor.isDead = true; // Mark Hoopa as dead
+            actor.hitByKegga = true; // Prevent further point additions for this Hoopa
+            actor.interactable = false; // Make Hoopa non-interactable
+            state.score += actor.pointValue; // Add points for killing Hoopa
+        }
+    }
+});
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
