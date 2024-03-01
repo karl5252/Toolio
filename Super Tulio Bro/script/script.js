@@ -1,24 +1,41 @@
-var playerXSpeed = 7;
-var gravity = 30;
-var jumpSpeed = 17;
-const scale = 20;
+const gameSettings = {
+  playerXSpeed: 7,
+  gravity: 30,
+  jumpSpeed: 15,
+  scale: 20,
+  actorXOverlap: 4,
+  canvasWidth: 800,
+  canvasHeight: 600,
+};
 let paused = false;
-
 let introShown = false;
+let totalDeaths = 0;
+let totalScore = 0;
+let scorePerLevel = 0; // Reset this at the start of each level
 
-var otherSprites = document.createElement("img");
-otherSprites.src = "img/sprites.png";
 
-var playerSprites = document.createElement("img");
-playerSprites.src = "img/player.png";
-var playerXOverlap = 4;
+function createSprite(src) {
+  let sprite = document.createElement("img");
+  sprite.src = src;
+  return sprite;
+}
 
-var hoopaSprites = document.createElement("img");
-hoopaSprites.src = "img/hoopa.png";
-var monsterXOverlap = 4;
+var otherSprites = createSprite("img/sprites.png");
+var playerSprites = createSprite("img/player.png");
+var hoopaSprites = createSprite("img/hoopa.png");
+var keggaSprites = createSprite("img/kegga.png");
 
-var keggaSprites = document.createElement("img");
-keggaSprites.src = "img/kegga.png";
+function actorOverlap(actor1, actor2) {
+  // Check if either actor is non-interactable or if they are the same actor
+  if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
+      return false;
+  }
+
+  return actor1.pos.x + actor1.size.x > actor2.pos.x &&
+         actor1.pos.x < actor2.pos.x + actor2.size.x &&
+         actor1.pos.y + actor1.size.y > actor2.pos.y &&
+         actor1.pos.y < actor2.pos.y + actor2.size.y;
+}
 
 
 
@@ -75,34 +92,49 @@ Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
-  if (keys.ArrowLeft) xSpeed -= playerXSpeed;
-  if (keys.ArrowRight) xSpeed += playerXSpeed;
-  let pos = this.pos;
-  let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
-    pos = movedX;
+  // Prevent horizontal movement if the player is dead
+  if (!this.isDead) {
+    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
+    if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
   }
 
-  let ySpeed = this.speed.y + time * gravity;
-  let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
-    pos = movedY;
-  } else if (keys.ArrowUp && ySpeed > 0) {
-    ySpeed = -jumpSpeed;
+  // Apply horizontal movement only if the player is not dead
+  let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
+  if (newPos.x !== this.pos.x) {
+    this.pos = newPos; // Update position if horizontal movement occurred
+  }
+
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
+
+  // Check for jump input and apply jump force if on the ground
+  if (!this.isDead && keys.isPressed("ArrowUp") && this.isOnGround(state)) {
+    ySpeed = -gameSettings.jumpSpeed;
+  }
+
+  // Apply vertical movement due to gravity or jump
+  newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
+  if (newPos.y !== this.pos.y) {
+    this.pos = newPos; // Update position if vertical movement occurred
+    this.speed.y = ySpeed; // Update vertical speed
   } else {
-    ySpeed = 0;
+    this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
   }
 
-  if (this.isDead) {
-    return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
-  }
-
-  if (state.level.touches(this.pos, this.size, "lava") || state.level.touches(this.pos, this.size, "Hoopa") || state.level.touches(this.pos, this.size, "KeggaTroopa")) {
+  // Check for harmful collisions, such as with lava
+  if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
+    // When player is marked as dead, make them drop to the ground
+    this.speed.y = gameSettings.gravity; // Set a positive ySpeed to simulate falling
   }
 
-  return new Player(pos, new Vec(xSpeed, ySpeed), this.isDead);
+  return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead);
 };
+
+Player.prototype.isOnGround = function(state) {
+  return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone");
+};
+
 
 class Lava {
   constructor(pos, speed, reset) {
@@ -135,6 +167,7 @@ class Coin {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
+    this.pointValue = 10;
   }
 
   get type() {
@@ -174,6 +207,7 @@ Coin.prototype.update = function(time) {
 class Hoopa extends Actor{
   constructor(pos, speed, isDead = false, deadTime = 0) {
    super(pos, speed, isDead, deadTime);
+   this.pointValue = 300;
   }
 
   get type() {
@@ -190,36 +224,50 @@ Hoopa.prototype.size = new Vec(0.8, 1.5);
 Hoopa.prototype.update = function(time, state) {
   if (this.isDead) {
     this.deadTime += time;
-    if (this.deadTime > 1.5) { // 1.5 seconds death animation
-      this.remove = true; // Mark the monster for removal
-    } 
-    return this; // Make the monster non-interactable
+    if (this.deadTime > 1.5) { // After 1.5 seconds of death animation, remove the Hoopa
+      this.remove = true;
+    }
+    return this; // Return early if Hoopa is dead, no further updates needed
   }
 
   let xSpeed = this.speed.x;
-  let ySpeed = this.speed.y + time * gravity;
   let pos = this.pos;
-  let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
-    pos = movedX;
-  } else {
+
+  // Use moveActor for horizontal movement, reversing direction on collision
+  let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
+  if (pos.x === newPos.x) {
     xSpeed = -xSpeed; // Reverse direction when hitting a wall
+  } else {
+    pos = newPos;
   }
 
-  let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
-    pos = movedY;
-  } else if (ySpeed > 0) {
-    ySpeed = 0;
+  // Gravity affects vertical speed
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
+  newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
+  if (pos.y === newPos.y) {
+    ySpeed = 0; // Stop vertical movement if we hit something
+  } else {
+    pos = newPos;
   }
+
+  // Check for collisions with sliding KeggaTroopas
+  state.actors.forEach(actor => {
+    if (actor instanceof KeggaTroopa && actor !== this && actor.isSliding && actorOverlap(this, actor)) {
+
+      this.isDead = true; // Hoopa dies if it collides with a sliding KeggaTroopa
+    }
+  });
 
   return new Hoopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
 };
 
 //add new class for second hoopa and its methods
 class KeggaTroopa extends Actor{
-  constructor(pos, speed, isDead = false, deadTime = 0) {
+  constructor(pos, speed, isDead = false, deadTime = 0, sliding = false, speedIncreased = false) {
     super(pos, speed, isDead, deadTime);
+    this.isSliding = sliding || false;
+    this.speedIncreased = speedIncreased || false;
+    this.pointValue = 500;
   }
 
   get type() {
@@ -236,41 +284,58 @@ KeggaTroopa.prototype.size = new Vec(0.8, 1.5);
 KeggaTroopa.prototype.update = function(time, state) {
   if (this.isDead) {
     this.deadTime += time;
-    if (this.deadTime > 1.5) { // 1.5 seconds death animation
-      this.remove = true; // Mark the monster for removal
-    } 
-    return this; // Make the monster non-interactable
+    if (this.deadTime > 1.5) { // After 1.5 seconds of death animation, remove the KeggaTroopa
+      this.remove = true;
+    }
+    return this; // Return early if KeggaTroopa is dead, no further updates needed
+  }
+
+  if (this.isSliding && !this.speedIncreased) {
+    this.speed.x *= 6; // Increase the speed if sliding and speed hasn't been increased yet
+    this.speedIncreased = true;
   }
 
   let xSpeed = this.speed.x;
-  let ySpeed = this.speed.y + time * gravity;
   let pos = this.pos;
-  let movedX = pos.plus(new Vec(xSpeed * time, 0));
-  if (!state.level.touches(movedX, this.size, "wall") && !state.level.touches(movedX, this.size, "stone")) {
-    pos = movedX;
-  } else {
+
+  // Use moveActor for horizontal movement, reversing direction on collision
+  let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
+  if (pos.x === newPos.x) {
     xSpeed = -xSpeed; // Reverse direction when hitting a wall
+  } else {
+    pos = newPos;
   }
 
-  let movedY = pos.plus(new Vec(0, ySpeed * time));
-  if (!state.level.touches(movedY, this.size, "wall") && !state.level.touches(movedY, this.size, "stone")) {
-    pos = movedY;
-  } else if (ySpeed > 0) {
-    ySpeed = 0;
+  // Gravity affects vertical speed
+  let ySpeed = this.speed.y + time * gameSettings.gravity;
+  newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
+  if (pos.y === newPos.y) {
+    ySpeed = 0; // Stop vertical movement if we hit something
+  } else {
+    pos = newPos;
   }
-  //if (/* condition */) {
-    // Spawn a 'tripped over kegga'
-   // return new TrippedOverKegga(/* parameters */);
- // }
 
-  // If the 'tripped over kegga' is sliding
-  //if (/* condition */) {
-    // Spawn a 'sliding kegga'
-  //  return new SlidingKegga(/* parameters */);
- // }
+  // Check for collisions with sliding KeggaTroopas
+  state.actors.forEach(actor => {
+    if (actor instanceof KeggaTroopa && actor !== this && actor.isSliding && actorOverlap(this, actor)) {
+      this.isDead = true; // KeggaTroopa dies if it collides with another sliding KeggaTroopa
+    }
+  });
+  // Check for collisions with other actors
+  state.actors.forEach(actor => {
+    if (actor !== this && this.isSliding && actorOverlap(this, actor)) {
+        if (actor instanceof Hoopa && !actor.isDead && !actor.hitByKegga) {
+            actor.isDead = true; // Mark Hoopa as dead
+            actor.hitByKegga = true; // Prevent further point additions for this Hoopa
+            actor.interactable = false; // Make Hoopa non-interactable
+            state.score += actor.pointValue; // Add points for killing Hoopa
+        }
+    }
+});
 
-  return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime);
+  return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
+
 
 var levelChars = {
   ".": "empty",
@@ -284,6 +349,7 @@ var levelChars = {
   "v": Lava,
   "m": Hoopa,
   "n": KeggaTroopa,
+  "E": "exit", // The exit is represented by E in the level plan
 };
 
 class Level {
@@ -301,31 +367,53 @@ class Level {
         return "empty";
       });
     });
+    this.exitReached = false;
+  }
+
+  touches(pos, size, type) {
+    let xStart = Math.floor(pos.x);
+    let xEnd = Math.ceil(pos.x + size.x);
+    let yStart = Math.floor(pos.y);
+    let yEnd = Math.ceil(pos.y + size.y);
+
+    for (let y = yStart; y < yEnd; y++) {
+      for (let x = xStart; x < xEnd; x++) {
+        let isOutside = x < 0 || x >= this.width || y < 0 || y >= this.height;
+        let here = isOutside ? "wall" : this.rows[y][x];
+        if (type === "wall" && (here === "wall" || here === "stone")) return true;
+        if (here == type) return true;
+      }
+    }
+    return false;
+  }
+
+  // New method for moving an actor and checking for collisions
+  moveActor(actor, move, time) {
+    let newPos = actor.pos.plus(move.times(time));
+    if (!this.touches(newPos, actor.size, "wall") && !this.touches(newPos, actor.size, "stone")) {
+      return newPos; // New position is valid, no collision
+    }
+    return actor.pos; // Collision detected, return original position
   }
 }
-Level.prototype.touches = function(pos, size, type) {
-  let xStart = Math.floor(pos.x);
-  let xEnd = Math.ceil(pos.x + size.x);
-  let yStart = Math.floor(pos.y);
-  let yEnd = Math.ceil(pos.y + size.y);
 
-  for (let y = yStart; y < yEnd; y++) {
-    for (let x = xStart; x < xEnd; x++) {
-      let isOutside = x < 0 || x >= this.width ||
-                      y < 0 || y >= this.height;
-      let here = isOutside ? "wall" : this.rows[y][x];
-      if (type === "wall" && (here === "wall" || here === "stone")) return true;
-      if (here == type) return true;
-    }
-  }
-  return false;
-};
+
 
 function overlap(actor1, actor2) {
     // If either actor is dead, they don't overlap.
     if (!actor1.interactable || !actor2.interactable) {
       return false;
     }
+    if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
+    (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
+  console.log("kegga is sliding and overlaps with hoppa");
+} 
+if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
+  actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
+  console.log("kegga is sliding and overlaps with another kegga");
+  }
+ 
+
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
@@ -333,67 +421,110 @@ function overlap(actor1, actor2) {
 }
 
 Lava.prototype.collide = function(state) {
+  let player = state.player;
+  player.isDead = true;
+  totalDeaths += 1;
+  //totalScore = Math.max(0, totalScore - 50);
   return new State(state.level, state.actors, "lost", this.coinsCollected);
 };
 
 Coin.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
   let status = state.status;
-  if (!filtered.some(a => a.type == "coin")) status = "won";
+  let points = 0;
+  //if (!filtered.some(a => a.type == "coin")) status = "won";
 
   // Increment coinsCollected property of the State class
   console.debug("updating the coin counter on collision with coin");
   let coinsCollected = state.coinsCollected + 1;
+  points = state.score + this.pointValue; // Create a new score variable
+  scorePerLevel += points;
 
-  return new State(state.level, filtered, status, coinsCollected);
+  return new State(state.level, filtered, status, coinsCollected, points);
 };
 
 
 Hoopa.prototype.collide = function(state) {
   let player = state.player;
-  if (this.interactable && overlap(this, player)) {
-    if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+  let points = 0;
+  if (!this.isDead && this.interactable && overlap(this, player)) {
+    if (player.pos.y + player.size.y < this.pos.y + 0.5){//(player.pos.y + player.size.y < this.pos.y + 0.5 && player.speed.y > 0 && player.pos.x + player.size.x > this.pos.x && player.pos.x < this.pos.x + this.size.x) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
-      return new State(state.level, state.actors, state.status, state.coinsCollected);
+      points = state.score + this.pointValue; // Create a new score variable
+      //scorePerLevel += points;
+
     } else {
       console.log("Player is dead");
-      player.isDead = true;0
-      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+      player.isDead = true;
+      totalDeaths += 1;
+      state.actors = state.actors.filter(a => a != this);
+      state.status = "lost";
     }
   }
-  return new State(state.level, state.actors, state.status, state.coinsCollected);
+  let slidingKegga = state.actors.find(actor => {
+    if (actor instanceof KeggaTroopa && actor.isSliding) {
+      console.log('Sliding KeggaTroopa:', actor);
+      return overlap(this, actor);
+    }
+  });
+  if (slidingKegga) {
+    console.debug("Hoopa collided with sliding KeggaTroopa");
+    this.speed.y = -gameSettings.jumpSpeed / 1.5;
+    //flip sprite on y
+    this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
+    points = state.score + this.pointValue; // Create a new score variable
+    //scorePerLevel += points;
+
+  }
+  scorePerLevel += points;
+  return new State(state.level, state.actors, state.status, state.coinsCollected, points);
 };
 
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
+  let points = 0; // Define points variable
+  //scorePerLevel +=
   if (this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
-      this.isDead = true;
-      this.interactable = false;
-      this.speed.x = 0;
-      return new State(state.level, state.actors, state.status, state.coinsCollected);
-    } else {
-      console.log("Player is dead");
-
-      return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+      this.isSliding = true;
+      console.log("is kegga sliding?: " + this.isSliding);
+      player.speed.y = -gameSettings.jumpSpeed / 1.5;
+      return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
+    } else if (!this.isDead && this.interactable && overlap(this, player)) {
+      if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+        this.isDead = true;
+        this.interactable = false;
+        this.speed.x = 0;
+        points = state.score + this.pointValue; // Update points variable
+        scorePerLevel += points;
+      } else {
+        console.log("Player is dead");
+        player.isDead = true;
+        totalDeaths += 1;
+        //totalScore = Math.max(0, totalScore - 50);
+        return new State(state.level, state.actors.filter(a => a != this), "lost", state.coinsCollected);
+      } 
     }
   }
-  return new State(state.level, state.actors, state.status, state.coinsCollected);
+
+  return new State(state.level, state.actors, state.status, state.coinsCollected, points); // Use points variable
 };
 
 class State {
-  constructor(level, actors, status, coinsCollected = 0) {
+  constructor(level, actors, status, coinsCollected = 0, score = 0, exitReached = false) {
     this.level = level;
     this.actors = actors;
     this.status = status;
-
     this.coinsCollected = coinsCollected;
-  }
+    this.score = score;
+    this.exitReached = exitReached; // Now part of the state
+}
+
 
   static start(level) {
-    return new State(level, level.startActors, "playing", this.coinsCollected);
+    return new State(level, level.startActors, "playing", this.coinsCollected, this.score);
   }
 
   get player() {
@@ -401,15 +532,25 @@ class State {
   }
 
   update(time, keys) {
-    let actors = this.actors.map((actor) => actor.update(time, this, keys));
+    let actors = this.actors.map(actor => actor.update(time, this, keys));
     actors = actors.filter(actor => !actor.remove);
-    let newState = new State(this.level, actors, this.status, this.coinsCollected);
 
-    if (newState.status != "playing") return newState;
+    let newState = new State(this.level, actors, this.status, this.coinsCollected, this.score, this.exitReached);
+
+    if (!newState.exitReached && newState.level.touches(newState.player.pos, newState.player.size, "exit")) {
+      newState.exitReached = true;
+      newState.status = "won"; // Optionally change the game status
+    }
 
     let player = newState.player;
-    if (this.level.touches(player.pos, player.size, "lava")) {
-      return new State(this.level, actors, "lost", this.coinsCollected);
+    if (!newState.exitReached && newState.level.touches(player.pos, player.size, "exit")) {
+      newState = new State(newState.level, actors, "won", newState.coinsCollected, newState.score, true);
+      // Assuming you might want to handle level transition or scoring here
+      return newState;
+    }
+
+    if (newState.level.touches(player.pos, player.size, "lava")) {
+      return new State(newState.level, actors, "lost", newState.coinsCollected, newState.score, newState.exitReached);
     }
 
     for (let actor of actors) {
@@ -417,7 +558,17 @@ class State {
         newState = actor.collide(newState);
       }
     }
-    //console.log("coinsCollected: ", newState.coinsCollected);
+
+    // Consider what should happen if keggas and hoopas overlap. Currently, this loop does nothing.
+    let keggasAndHoopas = actors.filter(actor => actor instanceof KeggaTroopa || actor instanceof Hoopa);
+    for (let i = 0; i < keggasAndHoopas.length; i++) {
+      for (let j = i + 1; j < keggasAndHoopas.length; j++) {
+        if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
+          // Handle overlap logic here
+        }
+      }
+    }
+
     return newState;
   }
 }
@@ -435,29 +586,54 @@ function elt(name, attrs, ...children) {
 }
 
 var CanvasDisplay = class CanvasDisplay {
-  constructor(parent, level) {
+  constructor(parent) {
+    // Find or create the canvas element
     let existingCanvas = document.querySelector("canvas");
-    console.debug("existingCanvas: ", existingCanvas);
-    if (existingCanvas){
+    if (existingCanvas) {
       this.canvas = existingCanvas;
-      //this.canvas.getContext('2d').clearRect(0, 0, this.canvas.width, this.canvas.height);
-    }else{
-      console.debug("creating new canvas");
+    } else {
       this.canvas = document.createElement("canvas");
-      this.canvas.width = Math.min(800, level.width * scale);
-      this.canvas.height = Math.min(600, level.height * scale);
       parent.appendChild(this.canvas);
     }
     this.cx = this.canvas.getContext("2d");
-
     this.flipPlayer = false;
 
+    // Initialize the viewport here to ensure it's done once
     this.viewport = {
       left: 0,
       top: 0,
-      width: this.canvas.width / scale,
-      height: this.canvas.height / scale,
+      width: this.canvas.width / gameSettings.scale,
+      height: this.canvas.height / gameSettings.scale
     };
+  }
+
+  initializeLevel(level) {
+    // Set canvas size based on the level size, do not reset the viewport here
+    this.canvas.width = Math.min(gameSettings.canvasWidth, level.width * gameSettings.scale);
+    this.canvas.height = Math.min(gameSettings.canvasHeight, level.height * gameSettings.scale);
+  }
+
+  syncState(state) {
+    this.updateViewport(state); // Update viewport based on the current state, don't reinitialize
+    this.clearDisplay(state.status);
+    this.drawBackground(state.level);
+    this.drawActors(state.actors);
+    this.drawStatus(state);
+  }
+
+  updateViewport(state) {
+    const view = this.viewport;
+    const margin = view.width / 3;
+    const player = state.player;
+    const center = player.pos.plus(player.size.times(0.5));
+
+    if (center.x < view.left + margin) {
+      view.left = Math.max(center.x - margin, 0);
+    } else if (center.x > view.left + view.width - margin) {
+      view.left = Math.min(center.x + margin - view.width, state.level.width - view.width);
+    }
+
+    // Add vertical camera movement if your game requires it
   }
 
   clear() {
@@ -491,62 +667,92 @@ var CanvasDisplay = class CanvasDisplay {
     this.cx.fillText(coinsCollectedText, coinsCollectedTextPosition, 30);
   }
 
+drawScreen(options) {
+    this.canvas.width = gameSettings.canvasWidth;
+    this.canvas.height = gameSettings.canvasHeight;
+    this.clear(); // Clear the canvas
+
+    // Default options
+    const defaults = {
+      textAlign: 'center',
+      fillStyle: 'white',
+      font: 'bold 20px "Courier New"',
+      messages: [],
+      action: null, // Optional action to perform on key press
+    };
+
+    // Override default options with provided options
+    const settings = {...defaults, ...options};
+
+    this.cx.textAlign = settings.textAlign;
+    this.cx.fillStyle = settings.fillStyle;
+    this.cx.font = settings.font;
+
+    settings.messages.forEach((message, index) => {
+      const x = this.canvas.width / 2;
+      const y = 100 + index * 50; // Adjust vertical spacing as needed
+      this.cx.fillText(message, x, y);
+    });
+
+    if (settings.action) {
+      window.addEventListener('keydown', settings.action, {once: true});
+    }
+  }
+
   drawIntro() {
     console.log('Drawing intro screen');
-
-    let cx = this.canvas.getContext('2d');
-
-    cx.font = 'bold 20px "Courier New"';
-    cx.fillStyle = 'black';
-    //fill canvas with solid black
-    cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    cx.fillStyle = 'white';
-    cx.fillText('Welcome to the game!', 100, 50);
-    cx.fillText("Press any key to start", 100, 100);
-    cx.fillText("Use arrow keys to move", 100, 150);
-    cx.fillText("Press 'P' to pause", 100, 200);
-    // add here other instructions to play the game
+    this.drawScreen({
+      messages: [
+        'Welcome to the game!',
+        'Press any key to start',
+        'Use arrow keys to move',
+        // Add more messages as needed
+      ],
+      action: () => {
+        // Action to start the game or go to the next screen
+        runGame(gameLevels, CanvasDisplay);
+      }
+    });
   }
 
   drawOutro() {
-    this.cx.font = 'bold 20px "Courier New"';
-    this.cx.fillStyle = 'white';
-    this.cx.fillText("Game Over", 100, 100);
-    this.cx.fillText("Press any key to restart", 100, 150);
+    console.log('Drawing outro screen');
+    let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
+    this.drawScreen({
+      messages: [
+        'Thanks for playing!',
+        `Total score: ${finalScore}`,
+        `Total deaths: ${totalDeaths}`,
+        'Press F5 to restart',
+      ],
+      action: () => {
+        // Optional: Action to restart the game or go to another screen
+        location.reload(); // Simple way to restart the game
+      }
+    });
   }
-
-  syncState(state) {
-    console.log('Syncing game state:', state.status); 
-    this.updateViewport(state);
-    this.clearDisplay(state.status);
-    this.drawBackground(state.level);
-    this.drawActors(state.actors);
-    this.drawStatus(state);
-
-  }
+   
 
   updateViewport(state) {
-    let view = this.viewport,
-      margin = view.width / 3;
-    let player = state.player;
-    let center = player.pos.plus(player.size.times(0.5));
-
+    const view = this.viewport;
+    const margin = view.width / 3;
+    const player = state.player;
+    const center = player.pos.plus(player.size.times(0.5));
+  
+    // Update viewport left position based on player's center and margin
     if (center.x < view.left + margin) {
       view.left = Math.max(center.x - margin, 0);
     } else if (center.x > view.left + view.width - margin) {
-      view.left = Math.min(
-        center.x + margin - view.width,
-        state.level.width - view.width
-      );
+      view.left = Math.min(center.x + margin - view.width, state.level.width - view.width);
     }
-    if (center.y < view.top + margin) {
-      view.top = Math.max(center.y - margin, 0);
-    } else if (center.y > view.top + view.height - margin) {
-      view.top = Math.min(
-        center.y + margin - view.height,
-        state.level.height - view.height
-      );
-    }
+  
+    // Optional: Update viewport top position if vertical movement is needed
+    // const verticalMargin = view.height / 4;
+    // if (center.y < view.top + verticalMargin) {
+    //   view.top = Math.max(center.y - verticalMargin, 0);
+    // } else if (center.y > view.top + view.height - verticalMargin) {
+    //   view.top = Math.min(center.y + verticalMargin - view.height, state.level.height - view.height);
+    // }
   }
 
   clearDisplay(status) {
@@ -566,6 +772,11 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   drawBackground(level) {
+    // Ensure the viewport is initialized
+    this.initializeLevel(level);
+    this.cx.fillStyle = "rgb(135, 206, 235)"; // Light blue color, similar to sky blue
+    this.cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     let { left, top, width, height } = this.viewport;
     let xStart = Math.floor(left);
     let xEnd = Math.ceil(left + width);
@@ -573,34 +784,38 @@ var CanvasDisplay = class CanvasDisplay {
     let yEnd = Math.ceil(top + height);
 
     for (let y = yStart; y < yEnd; y++) {
-      for (let x = xStart; x < xEnd; x++) {
-        let tile = level.rows[y][x];
-        if (tile == "empty") continue;
-        let screenX = (x - left) * scale;
-        let screenY = (y - top) * scale;
-        //let tileX = tile == "lava" ? scale : 0;
-        let tileX;
-        if (tile == "lava") {
-          tileX = scale;
-        } else if (tile == "stone") {
-          tileX = 3.5 * scale; // Change this to the x-coordinate of the new texture in your spritesheet
-        } else {
-          tileX = 0;
+        for (let x = xStart; x < xEnd; x++) {
+            if (y < 0 || y >= level.rows.length || x < 0 || x >= level.rows[y].length) {
+                continue; // Skip tiles outside the level bounds
+            }
+            let tile = level.rows[y][x];
+            if (tile == "empty") continue;
+            let screenX = (x - left) * gameSettings.scale;
+            let screenY = (y - top) * gameSettings.scale;
+
+            if (tile == "exit") {
+                this.cx.fillStyle = "gold"; // Gold color for the exit
+                this.cx.fillRect(screenX, screenY, gameSettings.scale, gameSettings.scale);
+                if (this.exitReached) {
+                  this.cx.fillStyle = "rgba(255, 0, 0, 0.5)"; // Overlay with semi-transparent red
+                  this.cx.fillRect(screenX, screenY, gameSettings.scale, gameSettings.scale);
+                }
+            } else {
+                let tileX = (tile == "lava") ? gameSettings.scale : 0;
+                if (tile == "stone") {
+                    tileX = 3.55 * gameSettings.scale; // Adjust for your spritesheet
+                }
+                this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
+            }
         }
-        this.cx.drawImage(
-          otherSprites,
-          tileX,
-          0,
-          scale,
-          scale,
-          screenX,
-          screenY,
-          scale,
-          scale
-        );
-      }
     }
-  }
+
+
+}
+
+
+
+  
 /**
  * Draws the player on the canvas.
  *
@@ -612,8 +827,8 @@ var CanvasDisplay = class CanvasDisplay {
  */
 drawPlayer(player, x, y, width, height) {
   // Adjust the width and x-coordinate based on the player's overlap.
-  width += playerXOverlap * 2;
-  x -= playerXOverlap;
+  width += gameSettings.actorXOverlap * 2;
+  x -= gameSettings.actorXOverlap;
 
   // Determine whether to flip the player's sprite based on the player's x speed.
   if (player.speed.x != 0) {
@@ -669,8 +884,8 @@ drawPlayer(player, x, y, width, height) {
  */
 drawHoopa(hoopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
-  width += monsterXOverlap * 2;
-  x -= monsterXOverlap;
+  width += gameSettings.actorXOverlap * 2;
+  x -= gameSettings.actorXOverlap;
 
   // Determine whether to flip the monster's sprite based on the monster's x speed.
   if (hoopa.speed.x != 0) {
@@ -720,8 +935,8 @@ drawHoopa(hoopa, x, y, width, height) {
 
 drawKegga(keggaTroopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
-  width += monsterXOverlap * 2;
-  x -= monsterXOverlap;
+  width += gameSettings.actorXOverlap * 2;
+  x -= gameSettings.actorXOverlap;
 
   // Determine whether to flip the monster's sprite based on the monster's x speed.
   if (keggaTroopa.speed.x != 0) {
@@ -730,14 +945,17 @@ drawKegga(keggaTroopa, x, y, width, height) {
 
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
-  if (keggaTroopa.isDead && keggaTroopa.deadTime < 1.5) {
-    console.debug("Drawing dead kegga monster");
+  if (keggaTroopa.isSliding && !keggaTroopa.isDead) {
+    console.debug("Drawing sliding kegga monster");
     tile = 10;
+  } else if (keggaTroopa.isDead && keggaTroopa.deadTime < 1.5) {
+    console.debug("Drawing dead kegga monster");
+    tile = 9;
   } else if (keggaTroopa.speed.y != 0) {
     tile = 8;
   } else if (keggaTroopa.speed.x != 0) {
     tile = Math.floor(Date.now() / 60) % 8;
-  } else {
+   } else {
     tile = 8;
   }
 
@@ -771,10 +989,10 @@ drawKegga(keggaTroopa, x, y, width, height) {
 
   drawActors(actors) {
     for (let actor of actors) {
-      let width = actor.size.x * scale;
-      let height = actor.size.y * scale;
-      let x = (actor.pos.x - this.viewport.left) * scale;
-      let y = (actor.pos.y - this.viewport.top) * scale;
+      let width = actor.size.x * gameSettings.scale;
+      let height = actor.size.y * gameSettings.scale;
+      let x = (actor.pos.x - this.viewport.left) * gameSettings.scale;
+      let y = (actor.pos.y - this.viewport.top) * gameSettings.scale;
       if (actor.type == "player") {
         this.drawPlayer(actor, x, y, width, height);
       }
@@ -785,7 +1003,7 @@ drawKegga(keggaTroopa, x, y, width, height) {
         this.drawKegga(actor, x, y, width, height);
       }
       else {
-        let tileX = (actor.type == "coin" ? 2 : 1) * scale;
+        let tileX = (actor.type == "coin" ? 2 : 1) * gameSettings.scale;
         let spriteWidth = actor.type == "coin" ? width * 0.72 : width; 
 
         //console.debug(`Drawing ${actor.type} at (${x}, ${y}) with size (${width}, ${height}) from spritesheet position (${tileX}, 0)`);
@@ -826,15 +1044,18 @@ function runAnimation(frameFunc) {
 }
 
 function runLevel(level, Display) {
-  let display = new Display(document.body, level);
+  let display = new Display(document.body);
+  display.initializeLevel(level); // Initialize the level and set viewport dimensions
   let state = State.start(level);
   let ending = 1;
   return new Promise((resolve) => {
     runAnimation((time) => {
-      if (introShown & !state.player.isDead) {
+      if (introShown && !state.player.isDead) {
         state.status = 'playing';
-      } else {
+      } else if (!introShown) {
         state.status = 'intro';
+        display.drawIntro();
+        return false; // Stop the animation loop if still on the intro screen
       }
       state = state.update(time, arrowKeys);
       display.syncState(state);
@@ -843,26 +1064,6 @@ function runLevel(level, Display) {
       } else if (ending > 0) {
         ending -= time;
         return true;
-      } else if(state.status === "intro"){
-        display.drawIntro();
-
-        // Add keydown listener for the ENTER key to start the game
-        window.addEventListener('keydown', function(event) {
-          console.log('Key pressed:', event.key); // Log the key that was pressed
-          if (event.key === 'Enter') {
-            console.log('ENTER key pressed'); // Log when the ENTER key is pressed
-            //state = State.start(level);
-            introShown = true;
-            //state.status = "playing";
-            console.log('Game state after pressing ENTER:', state.status); // Log the game state after pressing ENTER
-
-            //state.score = 0;
-            //state.coinsCollected = 0;
-            resolve(state.status);
-          }
-        }, {once: true}); // The listener is removed after being invoked once
-
-        return false;
       } else {
         display.clear();
         resolve(state.status);
@@ -872,39 +1073,86 @@ function runLevel(level, Display) {
   });
 }
 
+
 async function runGame(plans, Display) {
-  for (let level = 0; level < plans.length; ) {
-    let status = await runLevel(
-      new Level(plans[level]),
-      Display
-    );
-    if (status == "won") level++;
+  // Display the intro screen first
+  let display = new CanvasDisplay(document.body);
+  display.drawIntro();
+
+  // Wait for the user to press 'Enter' to start the game
+  await new Promise(resolve => {
+      window.addEventListener("keydown", function handler(event) {
+          if (event.key === 'Enter') {
+              console.log('Game starting after intro...');
+              window.removeEventListener("keydown", handler);
+              resolve();
+          }
+      });
+  });
+
+  // Now start the game levels
+  for (let level = 0; level < plans.length;) {
+      let status = await runLevel(new Level(plans[level]), Display);
+      if (status == "won"){
+        totalScore += scorePerLevel;  //faield to load score
+        level++;
+      } 
   }
 
   console.log("You've won!");
+  display.drawOutro();
+
 }
+
+// Modify the runLevel function to not show the intro again
+function runLevel(level, Display) {
+  let display = new Display(document.body, level);
+  let state = State.start(level);
+  let ending = 1;
+  return new Promise((resolve) => {
+      runAnimation((time) => {
+          state = state.update(time, arrowKeys);
+          display.syncState(state);
+          if (state.status == "playing") {
+              return true;
+          } else if (ending > 0) {
+              ending -= time;
+              return true;
+          } else {
+              display.clear();
+              resolve(state.status);
+              return false;
+          }
+      });
+  });
+}
+
 
 function trackKeys(keys) {
   let down = Object.create(null);
+  let pressed = Object.create(null); // New object to track freshly pressed keys
+
   function track(event) {
-    
     if (keys.includes(event.key)) {
-      down[event.key] = event.type == "keydown";
+      let state = event.type == "keydown";
+      if (state && !down[event.key]) {
+        pressed[event.key] = true; // Mark as freshly pressed if it wasn't down before
+      }
+      down[event.key] = state;
       event.preventDefault();
     }
   }
   window.addEventListener("keydown", track);
   window.addEventListener("keyup", track);
-  window.addEventListener('keydown', function(event) {
-    if (event.key === 'p' || event.key === 'P') { // Replace 'p' with your pause key
-      paused = !paused;
-      console.debug("paused: ", paused);
+
+  down.isPressed = (key) => {
+    if (pressed[key]) {
+      pressed[key] = false; // Reset after acknowledging the press
+      return true;
     }
-  });
+    return false;
+  };
+
   return down;
 }
 
-
-
-
-//runGame([simpleLevelPlan], CanvasDisplay);
