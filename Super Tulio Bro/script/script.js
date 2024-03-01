@@ -338,17 +338,32 @@ KeggaTroopa.prototype.update = function(time, state) {
       this.isDead = true; // KeggaTroopa dies if it collides with another sliding KeggaTroopa
     }
   });
-  // Check for collisions with other actors
-  state.actors.forEach(actor => {
-    if (actor !== this && this.isSliding && actorOverlap(this, actor)) {
-        if (actor instanceof Hoopa && !actor.isDead && !actor.hitByKegga) {
-            actor.isDead = true; // Mark Hoopa as dead
-            actor.hitByKegga = true; // Prevent further point additions for this Hoopa
-            actor.interactable = false; // Make Hoopa non-interactable
-            totalScore += actor.pointValue; // Add points for killing Hoopa
-            console.log(`slammed by KeggaTroopa. Points added: ${actor.pointValue}`);
-        }
+// Check for collisions with other actors
+state.actors.forEach(actor => {
+  // Ensure we're not checking the actor against itself
+  if (actor !== this && actorOverlap(this, actor)) {
+    // Handle collision with Hoopa
+    if (actor instanceof Hoopa && !actor.isDead) {
+      if (this.isSliding) {
+        // Sliding KeggaTroopa collides with Hoopa
+        actor.isDead = true; // Mark Hoopa as dead
+        actor.interactable = false; // Make Hoopa non-interactable
+        console.log(`Hoopa slammed by sliding KeggaTroopa. Points added: ${actor.pointValue}`);
+        totalScore += actor.pointValue; // Add points for killing Hoopa
+      }
+    } else if (actor instanceof KeggaTroopa) {
+      // Handle collision between KeggaTroopas
+      if (this.isSliding && !actor.isSliding) {
+        // Sliding KeggaTroopa collides with a non-sliding KeggaTroopa
+        console.log("Sliding KeggaTroopa collided with non-sliding KeggaTroopa");
+        // Decide the behavior (e.g., make the non-sliding KeggaTroopa start sliding, stop the sliding KeggaTroopa, etc.)
+        actor.interactable = false; // Make the non-sliding KeggaTroopa non-interactable
+        actor.isDead = true; // Example action: make the non-sliding KeggaTroopa start sliding
+        totalScore += actor.pointValue / 2; // Add points for killing Hoopa
+
+      }
     }
+  }
 });
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
