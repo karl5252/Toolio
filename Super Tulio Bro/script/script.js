@@ -42,17 +42,16 @@ function actorOverlap(actor1, actor2) {
 }
 
 function updatePoints(state, pointsToAdd) {
-  let newScore = state.score + pointsToAdd;
-  scorePerLevel += pointsToAdd; // Accumulate points for the current level
-  console.log(`Points updated. New score: ${newScore}, Score this level: ${scorePerLevel}`);
+  totalScore += pointsToAdd; // Add points directly to totalScore
+  console.debug(`Points updated. Total score: ${totalScore}`);
   // Return a new state with the updated score
-  return new State(state.level, state.actors, state.status,  newScore);
+  return new State(state.level, state.actors, state.status,  totalScore);
 }
 
 
 function updateTotalScore() {
   totalScore += scorePerLevel; // Add the score for the current level to the total score
-  console.log(`Total Score Updated: ${totalScore}`);
+  console.debug(`Total Score Updated: ${totalScore}`);
   scorePerLevel = 0; // Reset score for the next level
 }
 
@@ -339,16 +338,32 @@ KeggaTroopa.prototype.update = function(time, state) {
       this.isDead = true; // KeggaTroopa dies if it collides with another sliding KeggaTroopa
     }
   });
-  // Check for collisions with other actors
-  state.actors.forEach(actor => {
-    if (actor !== this && this.isSliding && actorOverlap(this, actor)) {
-        if (actor instanceof Hoopa && !actor.isDead && !actor.hitByKegga) {
-            actor.isDead = true; // Mark Hoopa as dead
-            actor.hitByKegga = true; // Prevent further point additions for this Hoopa
-            actor.interactable = false; // Make Hoopa non-interactable
-            state.score += actor.pointValue; // Add points for killing Hoopa
-        }
+// Check for collisions with other actors
+state.actors.forEach(actor => {
+  // Ensure we're not checking the actor against itself
+  if (actor !== this && actorOverlap(this, actor)) {
+    // Handle collision with Hoopa
+    if (actor instanceof Hoopa && !actor.isDead) {
+      if (this.isSliding) {
+        // Sliding KeggaTroopa collides with Hoopa
+        actor.isDead = true; // Mark Hoopa as dead
+        actor.interactable = false; // Make Hoopa non-interactable
+        console.log(`Hoopa slammed by sliding KeggaTroopa. Points added: ${actor.pointValue}`);
+        totalScore += actor.pointValue; // Add points for killing Hoopa
+      }
+    } else if (actor instanceof KeggaTroopa) {
+      // Handle collision between KeggaTroopas
+      if (this.isSliding && !actor.isSliding) {
+        // Sliding KeggaTroopa collides with a non-sliding KeggaTroopa
+        console.log("Sliding KeggaTroopa collided with non-sliding KeggaTroopa");
+        // Decide the behavior (e.g., make the non-sliding KeggaTroopa start sliding, stop the sliding KeggaTroopa, etc.)
+        actor.interactable = false; // Make the non-sliding KeggaTroopa non-interactable
+        actor.isDead = true; // Example action: make the non-sliding KeggaTroopa start sliding
+        totalScore += actor.pointValue / 2; // Add points for killing Hoopa
+
+      }
     }
+  }
 });
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
@@ -445,7 +460,7 @@ Lava.prototype.collide = function(state) {
     totalDeaths += 1;
     playerLives -= 1;
     //player.interactable = false; // Make the player non-interactable
-    console.log("Player is dead, remaining lives: " + playerLives);
+    console.debug("Player is dead, remaining lives: " + playerLives);
   }
 
   //totalScore = Math.max(0, totalScore - 50);
@@ -470,46 +485,31 @@ Coin.prototype.collide = function(state) {
 Hoopa.prototype.collide = function(state) {
   let player = state.player;
 
+  // Check for collision with player
   if (!this.isDead && this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       // Hoopa is killed by the player
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
-      
+
       // Update the state with points for killing Hoopa
-      let newState = updatePoints(state, this.pointValue);
-      console.debug(`Hoopa killed by player. Points added: ${this.pointValue}`);
-
-      return new State(newState.level, newState.actors, newState.status,  newState.score);
-    } else {
+      console.log(`Hoopa killed by player. Points added: ${this.pointValue}`);
+      return updatePoints(state, this.pointValue);
+    } else if (!player.isDead) {
       // Player dies on collision with Hoopa
-      if (!player.isDead) { // Check if the player is not already dead
-        player.isDead = true;
-        totalDeaths += 1;
-        playerLives -= 1;
-        //player.interactable = false; // Make the player non-interactable
-        console.log("Player is dead, remaining lives: " + playerLives);
-      }
-
-      return new State(state.level, state.actors.filter(a => a != this), "lost",  state.score);
+      player.isDead = true;
+      totalDeaths += 1;
+      playerLives -= 1;
+      console.log("Player is dead, remaining lives: " + playerLives);
+      return new State(state.level, state.actors.filter(a => a != this), "lost", state.score);
     }
-  }
-
-  // Check for collision with a sliding KeggaTroopa
-  let slidingKegga = state.actors.find(actor => actor instanceof KeggaTroopa && actor.isSliding && overlap(this, actor));
-  if (slidingKegga) {
-    console.debug("Hoopa collided with sliding KeggaTroopa");
-    this.isDead = true; // Hoopa is killed by sliding KeggaTroopa
-    this.speed.y = -gameSettings.jumpSpeed / 1.5; // Add some bounce effect
-
-    // Update the state with points for Hoopa killed by KeggaTroopa
-    return updatePoints(state, this.pointValue);
   }
 
   // No points update needed if no collision of interest occurred
   return state;
 };
+
 
 KeggaTroopa.prototype.collide = function(state) {
   let player = state.player;
@@ -519,7 +519,7 @@ KeggaTroopa.prototype.collide = function(state) {
     // Player jumps on top of KeggaTroopa, making it slide
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
-      console.debug("KeggaTroopa is sliding.");
+      console.debug("KeggaTroopa is sliding. " + this.isSliding);
       player.speed.y = -gameSettings.jumpSpeed / 1.5; // Bounce effect
 
       // No points update, just change in state
@@ -531,22 +531,12 @@ KeggaTroopa.prototype.collide = function(state) {
         totalDeaths += 1;
         playerLives -= 1;
         //player.interactable = false; // Make the player non-interactable
-        console.log("Player is dead, remaining lives: " + playerLives);
+        console.debug("Player is dead, remaining lives: " + playerLives);
       }
 
       // Remove the KeggaTroopa from the state and update status
       return new State(state.level, state.actors.filter(a => a != this), "lost",  state.score);
     }
-  }
-
-  // Check for collision with another sliding KeggaTroopa
-  let slidingKeggaCollision = state.actors.find(actor => actor instanceof KeggaTroopa && actor.isSliding && actor !== this && overlap(this, actor));
-  if (slidingKeggaCollision) {
-    console.debug("KeggaTroopa collided with sliding KeggaTroopa");
-    this.isDead = true; // KeggaTroopa is killed by another sliding KeggaTroopa
-
-    // Update the state with points for KeggaTroopa killed by another KeggaTroopa
-    return updatePoints(state, this.pointValue);
   }
 
   // Return state unmodified if no relevant collision occurred
@@ -696,7 +686,7 @@ var CanvasDisplay = class CanvasDisplay {
   
     let levelText = `Level: WORLD ${levelCounter}`.toLocaleUpperCase();
     let livesText = `Lives: ${playerLives}`.toLocaleUpperCase();
-    let scoreText = `Score: ${state.score}`.toLocaleUpperCase();
+    let scoreText = `Score: ${totalScore}`.toLocaleUpperCase();
     let coinsCollectedText = `Coins: ${coinsCollected}`.toLocaleUpperCase();
 
     let levelTextWidth = this.cx.measureText(levelText).width;
@@ -769,13 +759,13 @@ drawScreen(options) {
     });
   }
 
-  drawOutro(finalScore) {
+  drawOutro() {
     console.debug('Drawing outro screen');
     //let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
     this.drawScreen({
       messages: [
         'Thanks for playing!',
-        `Total score: ${finalScore}`,
+        `Total score: ${totalScore}`,
         `Total deaths: ${totalDeaths}`,
         'Press F5 to restart',
       ],
@@ -1156,7 +1146,7 @@ async function runGame(plans, Display) {
     }
 }
 
-console.log("You've won the game!");
+console.debug("You've won the game!");
 display.drawOutro(totalScore);
 };
 
