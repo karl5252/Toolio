@@ -12,6 +12,8 @@ let introShown = false;
 let totalDeaths = 0;
 let totalScore = 0;
 let scorePerLevel = 0; // Reset this at the start of each level
+let levelCounter = 1; // Start from level 1
+
 
 
 function createSprite(src) {
@@ -406,11 +408,11 @@ function overlap(actor1, actor2) {
     }
     if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
     (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
-  console.log("kegga is sliding and overlaps with hoppa");
+  console.debug("kegga is sliding and overlaps with hoppa");
 } 
 if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
   actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
-  console.log("kegga is sliding and overlaps with another kegga");
+  console.debug("kegga is sliding and overlaps with another kegga");
   }
  
 
@@ -456,7 +458,7 @@ Hoopa.prototype.collide = function(state) {
       //scorePerLevel += points;
 
     } else {
-      console.log("Player is dead");
+      console.debug("Player is dead");
       player.isDead = true;
       totalDeaths += 1;
       state.actors = state.actors.filter(a => a != this);
@@ -465,7 +467,7 @@ Hoopa.prototype.collide = function(state) {
   }
   let slidingKegga = state.actors.find(actor => {
     if (actor instanceof KeggaTroopa && actor.isSliding) {
-      console.log('Sliding KeggaTroopa:', actor);
+      console.debug('Sliding KeggaTroopa:', actor);
       return overlap(this, actor);
     }
   });
@@ -489,7 +491,7 @@ KeggaTroopa.prototype.collide = function(state) {
   if (this.interactable && overlap(this, player)) {
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
-      console.log("is kegga sliding?: " + this.isSliding);
+      console.debug("is kegga sliding?: " + this.isSliding);
       player.speed.y = -gameSettings.jumpSpeed / 1.5;
       return new State(state.level, state.actors, state.status, state.coinsCollected, state.score);
     } else if (!this.isDead && this.interactable && overlap(this, player)) {
@@ -500,7 +502,7 @@ KeggaTroopa.prototype.collide = function(state) {
         points = state.score + this.pointValue; // Update points variable
         scorePerLevel += points;
       } else {
-        console.log("Player is dead");
+        console.debug("Player is dead");
         player.isDead = true;
         totalDeaths += 1;
         //totalScore = Math.max(0, totalScore - 50);
@@ -650,7 +652,7 @@ var CanvasDisplay = class CanvasDisplay {
     this.cx.font = 'bold 20px "Courier New"';
     this.cx.fillStyle = 'white';
   
-    let levelText = `Level: ${state.level.name}`.toLocaleUpperCase();
+    let levelText = `Level: WORLD ${levelCounter}`.toLocaleUpperCase();
     let scoreText = `Score: ${state.score}`.toLocaleUpperCase();
     let coinsCollectedText = `Coins: ${state.coinsCollected}`.toLocaleUpperCase();
 
@@ -700,7 +702,7 @@ drawScreen(options) {
   }
 
   drawIntro() {
-    console.log('Drawing intro screen');
+    console.debug('Drawing intro screen');
     this.drawScreen({
       messages: [
         'Welcome to the game!',
@@ -716,7 +718,7 @@ drawScreen(options) {
   }
 
   drawOutro() {
-    console.log('Drawing outro screen');
+    console.debug('Drawing outro screen');
     let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
     this.drawScreen({
       messages: [
@@ -1083,7 +1085,7 @@ async function runGame(plans, Display) {
   await new Promise(resolve => {
       window.addEventListener("keydown", function handler(event) {
           if (event.key === 'Enter') {
-              console.log('Game starting after intro...');
+              console.debug('Game starting after intro...');
               window.removeEventListener("keydown", handler);
               resolve();
           }
@@ -1095,11 +1097,12 @@ async function runGame(plans, Display) {
       let status = await runLevel(new Level(plans[level]), Display);
       if (status == "won"){
         totalScore += scorePerLevel;  //faield to load score
+        levelCounter++;
         level++;
       } 
   }
 
-  console.log("You've won!");
+  console.debug("You've won!");
   display.drawOutro();
 
 }
