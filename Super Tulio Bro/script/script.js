@@ -253,6 +253,7 @@ Hoopa.prototype.update = function(time, state) {
   // Check for collisions with sliding KeggaTroopas
   state.actors.forEach(actor => {
     if (actor instanceof KeggaTroopa && actor !== this && actor.isSliding && actorOverlap(this, actor)) {
+
       this.isDead = true; // Hoopa dies if it collides with a sliding KeggaTroopa
     }
   });
@@ -441,13 +442,12 @@ Hoopa.prototype.collide = function(state) {
       this.interactable = false;
       this.speed.x = 0;
       points = state.score + this.pointValue; // Create a new score variable
-      scorePerLevel += points;
+      //scorePerLevel += points;
 
     } else {
       console.log("Player is dead");
       player.isDead = true;
       totalDeaths += 1;
-      //totalScore = Math.max(0, totalScore - 50);
       state.actors = state.actors.filter(a => a != this);
       state.status = "lost";
     }
@@ -464,10 +464,10 @@ Hoopa.prototype.collide = function(state) {
     //flip sprite on y
     this.isDead = true; // Kill the Hoopa if it collides with a sliding KeggaTroopa
     points = state.score + this.pointValue; // Create a new score variable
-    scorePerLevel += points;
+    //scorePerLevel += points;
 
   }
-
+  scorePerLevel += points;
   return new State(state.level, state.actors, state.status, state.coinsCollected, points);
 };
 
@@ -497,6 +497,7 @@ KeggaTroopa.prototype.collide = function(state) {
       } 
     }
   }
+
   return new State(state.level, state.actors, state.status, state.coinsCollected, points); // Use points variable
 };
 
@@ -577,36 +578,51 @@ var CanvasDisplay = class CanvasDisplay {
   constructor(parent) {
     // Find or create the canvas element
     let existingCanvas = document.querySelector("canvas");
-    console.debug("existingCanvas: ", existingCanvas);
     if (existingCanvas) {
       this.canvas = existingCanvas;
     } else {
-      console.debug("creating new canvas");
       this.canvas = document.createElement("canvas");
       parent.appendChild(this.canvas);
     }
     this.cx = this.canvas.getContext("2d");
     this.flipPlayer = false;
 
-    // Initialize a default viewport in case it's used before setting up with level specifics
-    this.viewport = {
-      left: 0,
-      top: 0,
-      width: this.canvas.width / gameSettings.scale, // Default width, will be updated in initializeLevel
-      height: this.canvas.height / gameSettings.scale // Default height, will be updated in initializeLevel
-    };
-  }
-
-
-  initializeLevel(level) {
-    this.canvas.width = Math.min(gameSettings.canvasWidth, level.width * gameSettings.scale);
-    this.canvas.height = Math.min(gameSettings.canvasHeight, level.height * gameSettings.scale);
+    // Initialize the viewport here to ensure it's done once
     this.viewport = {
       left: 0,
       top: 0,
       width: this.canvas.width / gameSettings.scale,
       height: this.canvas.height / gameSettings.scale
     };
+  }
+
+  initializeLevel(level) {
+    // Set canvas size based on the level size, do not reset the viewport here
+    this.canvas.width = Math.min(gameSettings.canvasWidth, level.width * gameSettings.scale);
+    this.canvas.height = Math.min(gameSettings.canvasHeight, level.height * gameSettings.scale);
+  }
+
+  syncState(state) {
+    this.updateViewport(state); // Update viewport based on the current state, don't reinitialize
+    this.clearDisplay(state.status);
+    this.drawBackground(state.level);
+    this.drawActors(state.actors);
+    this.drawStatus(state);
+  }
+
+  updateViewport(state) {
+    const view = this.viewport;
+    const margin = view.width / 3;
+    const player = state.player;
+    const center = player.pos.plus(player.size.times(0.5));
+
+    if (center.x < view.left + margin) {
+      view.left = Math.max(center.x - margin, 0);
+    } else if (center.x > view.left + view.width - margin) {
+      view.left = Math.min(center.x + margin - view.width, state.level.width - view.width);
+    }
+
+    // Add vertical camera movement if your game requires it
   }
 
   clear() {
@@ -640,63 +656,71 @@ var CanvasDisplay = class CanvasDisplay {
     this.cx.fillText(coinsCollectedText, coinsCollectedTextPosition, 30);
   }
 
+drawScreen(options) {
+    this.canvas.width = gameSettings.canvasWidth;
+    this.canvas.height = gameSettings.canvasHeight;
+    this.clear(); // Clear the canvas
+
+    // Default options
+    const defaults = {
+      textAlign: 'center',
+      fillStyle: 'white',
+      font: 'bold 20px "Courier New"',
+      messages: [],
+      action: null, // Optional action to perform on key press
+    };
+
+    // Override default options with provided options
+    const settings = {...defaults, ...options};
+
+    this.cx.textAlign = settings.textAlign;
+    this.cx.fillStyle = settings.fillStyle;
+    this.cx.font = settings.font;
+
+    settings.messages.forEach((message, index) => {
+      const x = this.canvas.width / 2;
+      const y = 100 + index * 50; // Adjust vertical spacing as needed
+      this.cx.fillText(message, x, y);
+    });
+
+    if (settings.action) {
+      window.addEventListener('keydown', settings.action, {once: true});
+    }
+  }
+
   drawIntro() {
-     // Set canvas size for the intro screen
-  this.canvas.width = gameSettings.canvasWidth; // or any other size suitable for the intro
-  this.canvas.height = gameSettings.canvasHeight; // or any other size suitable for the intro
-
-  console.log('Drawing intro screen');
-
-    let cx = this.canvas.getContext('2d');
-
-    cx.font = 'bold 20px "Courier New"';
-    cx.fillStyle = 'black';
-    //fill canvas with solid black
-    cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    cx.fillStyle = 'white';
-    cx.fillText('Welcome to the game!', this.canvas.width / 2, 50);
-    cx.fillText("Press any key to start", this.canvas.width / 2, 100);
-    cx.fillText("Use arrow keys to move", this.canvas.width / 2, 150);
-    //cx.fillText("Press 'P' to pause", 100, 200);
-    // add here other instructions to play the game
+    console.log('Drawing intro screen');
+    this.drawScreen({
+      messages: [
+        'Welcome to the game!',
+        'Press any key to start',
+        'Use arrow keys to move',
+        // Add more messages as needed
+      ],
+      action: () => {
+        // Action to start the game or go to the next screen
+        runGame(gameLevels, CanvasDisplay);
+      }
+    });
   }
 
   drawOutro() {
-         // Set canvas size for the intro screen
-  this.canvas.width = gameSettings.canvasWidth; // or any other size suitable for the intro
-  this.canvas.height = gameSettings.canvasHeight; // or any other size suitable for the intro
-    this.clear(); // Clear the canvas
-  
-    // Draw outro messages
-    this.cx.fillStyle = 'white';
-    this.cx.textAlign = 'center';
-    this.cx.font = 'bold 20px "Courier New"';
+    console.log('Drawing outro screen');
     let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
-    this.cx.fillText('Thanks for playing!', this.canvas.width / 2, 100);
-    this.cx.fillText(`Total score: ${finalScore}`, this.canvas.width / 2, 150);
-    this.cx.fillText(`Total deaths: ${totalDeaths}`, this.canvas.width / 2, 200);
-    this.cx.fillText('Press F5 to restart', this.canvas.width / 2, 300);
-  
-    // Listen for any key to restart the game
-    window.addEventListener('keydown', () => {
-      // Reset global variables or reload the page for a full reset
-      totalDeaths = 0;
-      totalScore = 0;
-      scorePerLevel = 0;
-      runGame(gameLevels, CanvasDisplay); // Restart the game
-    }, { once: true });
+    this.drawScreen({
+      messages: [
+        'Thanks for playing!',
+        `Total score: ${finalScore}`,
+        `Total deaths: ${totalDeaths}`,
+        'Press F5 to restart',
+      ],
+      action: () => {
+        // Optional: Action to restart the game or go to another screen
+        location.reload(); // Simple way to restart the game
+      }
+    });
   }
-  
-
-  syncState(state) {
-    console.log('Syncing game state:', state.status); 
-    this.updateViewport(state); // Make sure this is called first
-    this.clearDisplay(state.status);
-    this.drawBackground(state.level);
-    this.drawActors(state.actors);
-    this.drawStatus(state);
-  }
-  
+   
 
   updateViewport(state) {
     const view = this.viewport;
