@@ -337,6 +337,7 @@ var levelChars = {
   "v": Lava,
   "m": Hoopa,
   "n": KeggaTroopa,
+  "E": "exit", // The exit is represented by E in the level plan
 };
 
 class Level {
@@ -354,6 +355,7 @@ class Level {
         return "empty";
       });
     });
+    this.exitReached = false;
   }
 
   touches(pos, size, type) {
@@ -418,7 +420,7 @@ Coin.prototype.collide = function(state) {
   let filtered = state.actors.filter(a => a != this);
   let status = state.status;
   let points = 0;
-  if (!filtered.some(a => a.type == "coin")) status = "won";
+  //if (!filtered.some(a => a.type == "coin")) status = "won";
 
   // Increment coinsCollected property of the State class
   console.debug("updating the coin counter on collision with coin");
@@ -499,14 +501,15 @@ KeggaTroopa.prototype.collide = function(state) {
 };
 
 class State {
-  constructor(level, actors, status, coinsCollected = 0, score = 0) {
+  constructor(level, actors, status, coinsCollected = 0, score = 0, exitReached = false) {
     this.level = level;
     this.actors = actors;
     this.status = status;
-
     this.coinsCollected = coinsCollected;
     this.score = score;
-  }
+    this.exitReached = exitReached; // Now part of the state
+}
+
 
   static start(level) {
     return new State(level, level.startActors, "playing", this.coinsCollected, this.score);
@@ -517,15 +520,25 @@ class State {
   }
 
   update(time, keys) {
-    let actors = this.actors.map((actor) => actor.update(time, this, keys));
+    let actors = this.actors.map(actor => actor.update(time, this, keys));
     actors = actors.filter(actor => !actor.remove);
-    let newState = new State(this.level, actors, this.status, this.coinsCollected, this.score);
 
-    if (newState.status != "playing") return newState;
+    let newState = new State(this.level, actors, this.status, this.coinsCollected, this.score, this.exitReached);
+
+    if (!newState.exitReached && newState.level.touches(newState.player.pos, newState.player.size, "exit")) {
+      newState.exitReached = true;
+      newState.status = "won"; // Optionally change the game status
+    }
 
     let player = newState.player;
-    if (this.level.touches(player.pos, player.size, "lava")) {
-      return new State(this.level, actors, "lost", this.coinsCollected, this.score);
+    if (!newState.exitReached && newState.level.touches(player.pos, player.size, "exit")) {
+      newState = new State(newState.level, actors, "won", newState.coinsCollected, newState.score, true);
+      // Assuming you might want to handle level transition or scoring here
+      return newState;
+    }
+
+    if (newState.level.touches(player.pos, player.size, "lava")) {
+      return new State(newState.level, actors, "lost", newState.coinsCollected, newState.score, newState.exitReached);
     }
 
     for (let actor of actors) {
@@ -533,14 +546,17 @@ class State {
         newState = actor.collide(newState);
       }
     }
-    let keggasAndHoopas = actors.filter(actor => actor instanceof KeggaTroopa || actor instanceof Hoopa);
 
-for (let i = 0; i < keggasAndHoopas.length; i++) {
-  for (let j = i + 1; j < keggasAndHoopas.length; j++) {
-    if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
+    // Consider what should happen if keggas and hoopas overlap. Currently, this loop does nothing.
+    let keggasAndHoopas = actors.filter(actor => actor instanceof KeggaTroopa || actor instanceof Hoopa);
+    for (let i = 0; i < keggasAndHoopas.length; i++) {
+      for (let j = i + 1; j < keggasAndHoopas.length; j++) {
+        if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
+          // Handle overlap logic here
+        }
+      }
     }
-  }
-}
+
     return newState;
   }
 }
@@ -571,17 +587,25 @@ var CanvasDisplay = class CanvasDisplay {
     }
     this.cx = this.canvas.getContext("2d");
     this.flipPlayer = false;
+
+    // Initialize a default viewport in case it's used before setting up with level specifics
+    this.viewport = {
+      left: 0,
+      top: 0,
+      width: this.canvas.width / gameSettings.scale, // Default width, will be updated in initializeLevel
+      height: this.canvas.height / gameSettings.scale // Default height, will be updated in initializeLevel
+    };
   }
 
+
   initializeLevel(level) {
-    // Set canvas size based on level dimensions
     this.canvas.width = Math.min(gameSettings.canvasWidth, level.width * gameSettings.scale);
     this.canvas.height = Math.min(gameSettings.canvasHeight, level.height * gameSettings.scale);
     this.viewport = {
       left: 0,
       top: 0,
       width: this.canvas.width / gameSettings.scale,
-      height: this.canvas.height / gameSettings.scale,
+      height: this.canvas.height / gameSettings.scale
     };
   }
 
@@ -630,24 +654,28 @@ var CanvasDisplay = class CanvasDisplay {
     //fill canvas with solid black
     cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     cx.fillStyle = 'white';
-    cx.fillText('Welcome to the game!', 100, 50);
-    cx.fillText("Press any key to start", 100, 100);
-    cx.fillText("Use arrow keys to move", 100, 150);
-    cx.fillText("Press 'P' to pause", 100, 200);
+    cx.fillText('Welcome to the game!', this.canvas.width / 2, 50);
+    cx.fillText("Press any key to start", this.canvas.width / 2, 100);
+    cx.fillText("Use arrow keys to move", this.canvas.width / 2, 150);
+    //cx.fillText("Press 'P' to pause", 100, 200);
     // add here other instructions to play the game
   }
 
   drawOutro() {
+         // Set canvas size for the intro screen
+  this.canvas.width = gameSettings.canvasWidth; // or any other size suitable for the intro
+  this.canvas.height = gameSettings.canvasHeight; // or any other size suitable for the intro
     this.clear(); // Clear the canvas
   
     // Draw outro messages
     this.cx.fillStyle = 'white';
     this.cx.textAlign = 'center';
+    this.cx.font = 'bold 20px "Courier New"';
     let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
     this.cx.fillText('Thanks for playing!', this.canvas.width / 2, 100);
     this.cx.fillText(`Total score: ${finalScore}`, this.canvas.width / 2, 150);
     this.cx.fillText(`Total deaths: ${totalDeaths}`, this.canvas.width / 2, 200);
-    this.cx.fillText('Press any key to restart', this.canvas.width / 2, 300);
+    this.cx.fillText('Press F5 to restart', this.canvas.width / 2, 300);
   
     // Listen for any key to restart the game
     window.addEventListener('keydown', () => {
@@ -662,50 +690,35 @@ var CanvasDisplay = class CanvasDisplay {
 
   syncState(state) {
     console.log('Syncing game state:', state.status); 
-    this.updateViewport(state);
+    this.updateViewport(state); // Make sure this is called first
     this.clearDisplay(state.status);
     this.drawBackground(state.level);
     this.drawActors(state.actors);
     this.drawStatus(state);
-
   }
+  
 
   updateViewport(state) {
-    // Ensure the viewport is initialized before using it
-    if (!this.viewport || !this.viewport.width || !this.viewport.height) {
-      // Initialize with default values or based on the current level
-      // This is a fallback and should ideally be set correctly when the level is initialized
-      this.viewport = {
-        left: 0,
-        top: 0,
-        width: this.canvas.width / gameSettings.scale,
-        height: this.canvas.height / gameSettings.scale,
-      };
-    }
+    const view = this.viewport;
+    const margin = view.width / 3;
+    const player = state.player;
+    const center = player.pos.plus(player.size.times(0.5));
   
-    let view = this.viewport,
-      margin = view.width / 3;
-    let player = state.player;
-    let center = player.pos.plus(player.size.times(0.5));
-  
+    // Update viewport left position based on player's center and margin
     if (center.x < view.left + margin) {
       view.left = Math.max(center.x - margin, 0);
     } else if (center.x > view.left + view.width - margin) {
-      view.left = Math.min(
-        center.x + margin - view.width,
-        state.level.width - view.width
-      );
+      view.left = Math.min(center.x + margin - view.width, state.level.width - view.width);
     }
-    if (center.y < view.top + margin) {
-      view.top = Math.max(center.y - margin, 0);
-    } else if (center.y > view.top + view.height - margin) {
-      view.top = Math.min(
-        center.y + margin - view.height,
-        state.level.height - view.height
-      );
-    }
-  }
   
+    // Optional: Update viewport top position if vertical movement is needed
+    // const verticalMargin = view.height / 4;
+    // if (center.y < view.top + verticalMargin) {
+    //   view.top = Math.max(center.y - verticalMargin, 0);
+    // } else if (center.y > view.top + view.height - verticalMargin) {
+    //   view.top = Math.min(center.y + verticalMargin - view.height, state.level.height - view.height);
+    // }
+  }
 
   clearDisplay(status) {
     if (status == "won") {
@@ -724,46 +737,49 @@ var CanvasDisplay = class CanvasDisplay {
   }
 
   drawBackground(level) {
-    // Ensure the viewport is initialized before using it
-    if (!this.viewport || !this.viewport.width || !this.viewport.height) {
-      // Initialize with default values or based on the current level
-      // This is a fallback and should ideally be set correctly when the level is initialized
-      this.initializeLevel(level); // Call initializeLevel to set up the viewport based on the level
-    }
-  
+    // Ensure the viewport is initialized
+    this.initializeLevel(level);
+    this.cx.fillStyle = "rgb(135, 206, 235)"; // Light blue color, similar to sky blue
+    this.cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     let { left, top, width, height } = this.viewport;
     let xStart = Math.floor(left);
     let xEnd = Math.ceil(left + width);
     let yStart = Math.floor(top);
     let yEnd = Math.ceil(top + height);
-  
+
     for (let y = yStart; y < yEnd; y++) {
-      for (let x = xStart; x < xEnd; x++) {
-        if (y < 0 || y >= level.rows.length || x < 0 || x >= level.rows[y].length) {
-          continue; // Skip tiles outside the level bounds
+        for (let x = xStart; x < xEnd; x++) {
+            if (y < 0 || y >= level.rows.length || x < 0 || x >= level.rows[y].length) {
+                continue; // Skip tiles outside the level bounds
+            }
+            let tile = level.rows[y][x];
+            if (tile == "empty") continue;
+            let screenX = (x - left) * gameSettings.scale;
+            let screenY = (y - top) * gameSettings.scale;
+
+            if (tile == "exit") {
+                this.cx.fillStyle = "gold"; // Gold color for the exit
+                this.cx.fillRect(screenX, screenY, gameSettings.scale, gameSettings.scale);
+                if (this.exitReached) {
+                  this.cx.fillStyle = "rgba(255, 0, 0, 0.5)"; // Overlay with semi-transparent red
+                  this.cx.fillRect(screenX, screenY, gameSettings.scale, gameSettings.scale);
+                }
+            } else {
+                let tileX = (tile == "lava") ? gameSettings.scale : 0;
+                if (tile == "stone") {
+                    tileX = 3.55 * gameSettings.scale; // Adjust for your spritesheet
+                }
+                this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
+            }
         }
-        let tile = level.rows[y][x];
-        if (tile == "empty") continue;
-        let screenX = (x - left) * gameSettings.scale;
-        let screenY = (y - top) * gameSettings.scale;
-        let tileX = (tile == "lava") ? gameSettings.scale : 0;
-        if (tile == "stone") {
-          tileX = 3.55 * gameSettings.scale; // Adjust for your spritesheet
-        }
-        this.cx.drawImage(
-          otherSprites,
-          tileX,
-          0,
-          gameSettings.scale,
-          gameSettings.scale,
-          screenX,
-          screenY,
-          gameSettings.scale,
-          gameSettings.scale
-        );
-      }
     }
-  }
+
+
+}
+
+
+
   
 /**
  * Draws the player on the canvas.
