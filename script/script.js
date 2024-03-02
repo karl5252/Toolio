@@ -1,7 +1,7 @@
 const gameSettings = {
   playerXSpeed: 7,
   gravity: 30,
-  jumpSpeed: 15,
+  jumpSpeed: 16,
   scale: 20,
   actorXOverlap: 4,
   canvasWidth: 800,
