@@ -385,6 +385,17 @@ var levelChars = {
   "m": Hoopa,
   "n": KeggaTroopa,
   "E": "exit", // The exit is represented by E in the level plan
+  "B": "bridge", // Bridge section should affect collision. Player walks on top of it.
+  "T": "pipeTopLeft",
+  "U": "pipeTopRight",
+  "[": "pipeBodyLeft",
+  "]": "pipeBodyRight",
+  "L": "pipeUpperCornerLeft",
+  "R": "pipeLowerCornerLeft",
+  "O": "pipeTopLeft",
+  "P": "pipeTopRight",
+  "Q": "pipeBodyHorizontalUpper",
+  "S": "pipeBodyHorizontalLower",
 };
 
 class Level {
