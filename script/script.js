@@ -767,7 +767,7 @@ drawScreen(options) {
     this.drawScreen({
       messages: [
         'Welcome to the game!',
-        'Press any key to start',
+        'Press ENTER key to start',
         'Use arrow keys to move',
         // Add more messages as needed
       ],
