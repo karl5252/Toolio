@@ -140,6 +140,8 @@ Player.prototype.update = function(time, state, keys) {
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
+    playerLives -= 1;
+    totalDeaths += 1;
     // When player is marked as dead, make them drop to the ground
     this.speed.y = gameSettings.gravity; // Set a positive ySpeed to simulate falling
   }
