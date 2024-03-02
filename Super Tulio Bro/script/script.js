@@ -151,7 +151,8 @@ Player.prototype.update = function(time, state, keys) {
 
 Player.prototype.isOnGround = function(state) {
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
-         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone");
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");
 };
 
 
@@ -201,7 +202,7 @@ class Coin {
 
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {
+  if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {  //lava can pass through bridges
     return new Lava(newPos, this.speed, this.reset);
   } else if (this.reset) {
     return new Lava(this.reset, this.speed, this.reset);
@@ -392,8 +393,8 @@ var levelChars = {
   "]": "pipeBodyRight",
   "L": "pipeUpperCornerLeft",
   "R": "pipeLowerCornerLeft",
-  "O": "pipeTopLeft",
-  "P": "pipeTopRight",
+  "I": "pipeTopHorizontalUpper",
+  "P": "pipeTopHorizontalLower",
   "Q": "pipeBodyHorizontalUpper",
   "S": "pipeBodyHorizontalLower",
 };
@@ -426,7 +427,10 @@ class Level {
       for (let x = xStart; x < xEnd; x++) {
         let isOutside = x < 0 || x >= this.width || y < 0 || y >= this.height;
         let here = isOutside ? "wall" : this.rows[y][x];
-        if (type === "wall" && (here === "wall" || here === "stone")) return true;
+        if (type === "wall" && (here === "wall" || here === "stone" ||
+          here === "pipeTopLeft" || here === "pipeTopRight" || here === "pipeBodyLeft" || here === "pipeBodyRight" || 
+          here === "pipeUpperCornerLeft" || here === "pipeLowerCornerLeft" || here === "pipeTopHorizontalUpper" || here === "pipeTopHorizontalLower" ||
+          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower")) return true;
         if (here == type) return true;
       }
     }
@@ -436,7 +440,9 @@ class Level {
   // New method for moving an actor and checking for collisions
   moveActor(actor, move, time) {
     let newPos = actor.pos.plus(move.times(time));
-    if (!this.touches(newPos, actor.size, "wall") && !this.touches(newPos, actor.size, "stone")) {
+    if (!this.touches(newPos, actor.size, "wall") &&
+     !this.touches(newPos, actor.size, "stone") &&
+     !this.touches(newPos, actor.size, "bridge")) {
       return newPos; // New position is valid, no collision
     }
     return actor.pos; // Collision detected, return original position
@@ -860,7 +866,29 @@ drawScreen(options) {
             } else {
                 let tileX = (tile == "lava") ? gameSettings.scale : 0;
                 if (tile == "stone") {
-                    tileX = 3.55 * gameSettings.scale; // Adjust for your spritesheet
+                    tileX = 3.65 * gameSettings.scale; // % in spritesheet
+                }else if (tile == "bridge") {
+                    tileX = 5.2 * gameSettings.scale; // B in spritesheet
+                } else if (tile == "pipeTopLeft") {
+                    tileX = 6.2 * gameSettings.scale; // T in spritesheet
+                } else if (tile == "pipeTopRight") {
+                    tileX = 7.2 * gameSettings.scale; // U in spritesheet
+                } else if (tile == "pipeBodyLeft") {
+                    tileX = 8.2 * gameSettings.scale; // [ in spritesheet
+                } else if (tile == "pipeBodyRight") {
+                    tileX = 9.2 * gameSettings.scale; // ] in spritesheet
+                } else if (tile == "pipeUpperCornerLeft") {
+                    tileX = 10.2 * gameSettings.scale; // L in spritesheet
+                } else if (tile == "pipeLowerCornerLeft") {
+                    tileX = 11.2 * gameSettings.scale; // R in spritesheet
+                } else if (tile == "pipeTopHorizontalUpper") {
+                    tileX = 12.2 * gameSettings.scale; // O in spritesheet
+                } else if (tile == "pipeTopHorizontalLower") {
+                    tileX = 13.2 * gameSettings.scale; // P in spritesheet
+                } else if (tile == "pipeBodyHorizontalUpper") {
+                    tileX = 14.2 * gameSettings.scale; // Q in spritesheet
+                } else if (tile == "pipeBodyHorizontalLower") {
+                    tileX = 15.2 * gameSettings.scale; // S in spritesheet
                 }
                 this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
             }
