@@ -25,6 +25,9 @@ Lava is a deadly obstacle. Touching lava results in an instant game over.
 ### Coin
 Collecting coins increases the player's score. Coins are placed at various points in each level.
 
+### PowerUp
+Collecting powerup allows player to touch enemies without penalty once. 
+
 ### Hoopa and KeggaTroopa
 These are enemy types in the game. Hoopa can be defeated by jumping on it, while KeggaTroopa becomes deadly when sliding.
 
