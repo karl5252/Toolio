@@ -235,11 +235,11 @@ class Hoopa extends Actor{
   }
 
   static create(pos) {
-    return new Hoopa(pos.plus(new Vec(0, -0.5)), new Vec(2, 0));
+    return new Hoopa(pos.plus(new Vec(0, 0)), new Vec(2, 0));
   }
 }
 
-Hoopa.prototype.size = new Vec(0.8, 1.5);
+Hoopa.prototype.size = new Vec(0.8, 0.99);
 
 Hoopa.prototype.update = function(time, state) {
   if (this.isDead) {
@@ -856,18 +856,14 @@ drawScreen(options) {
             let screenX = (x - left) * gameSettings.scale;
             let screenY = (y - top) * gameSettings.scale;
 
-            if (tile == "exit") {
-                this.cx.fillStyle = "gold"; // Gold color for the exit
-                this.cx.fillRect(screenX, screenY, gameSettings.scale, gameSettings.scale);
-                if (this.exitReached) {
-                  this.cx.fillStyle = "rgba(255, 0, 0, 0.5)"; // Overlay with semi-transparent red
-                  this.cx.fillRect(screenX, screenY, gameSettings.scale, gameSettings.scale);
-                }
-            } else {
+            // Draw the tile based on its type
                 let tileX = (tile == "lava") ? gameSettings.scale : 0;
                 if (tile == "stone") {
                     tileX = 3.65 * gameSettings.scale; // % in spritesheet
-                }else if (tile == "bridge") {
+                }else if (tile == "exit"){
+                  tileX = 16.2 * gameSettings.scale; // E in spritesheet
+                }
+                else if (tile == "bridge") {
                     tileX = 5.2 * gameSettings.scale; // B in spritesheet
                 } else if (tile == "pipeTopLeft") {
                     tileX = 6.2 * gameSettings.scale; // T in spritesheet
@@ -891,12 +887,10 @@ drawScreen(options) {
                     tileX = 15.2 * gameSettings.scale; // S in spritesheet
                 }
                 this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
+              }
             }
-        }
     }
-
-
-}
+    
 
 
 
@@ -971,6 +965,8 @@ drawHoopa(hoopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
   width += gameSettings.actorXOverlap * 2;
   x -= gameSettings.actorXOverlap;
+
+  //height = gameSettings.scale + 10; //setting the height for hoppa to be bit smaller and fit ONE TILE
 
   // Determine whether to flip the monster's sprite based on the monster's x speed.
   if (hoopa.speed.x != 0) {
@@ -1082,7 +1078,7 @@ drawKegga(keggaTroopa, x, y, width, height) {
         this.drawPlayer(actor, x, y, width, height);
       }
       else if (actor.type == "hoopa") {
-        this.drawHoopa(actor, x, y, width, height);
+        this.drawHoopa(actor, x, y-10, width, height+10);
       }
       else if (actor.type == "keggaTroopa") {
         this.drawKegga(actor, x, y, width, height);
