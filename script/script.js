@@ -452,6 +452,19 @@ var levelChars = {
   "P": "pipeTopHorizontalLower",
   "Q": "pipeBodyHorizontalUpper",
   "S": "pipeBodyHorizontalLower",
+  //brewing tank
+  "G": "brewingTankSectionLeft",
+  "H": "brewingTankSectionRight",
+  "J": "brewingTankBottomRight",
+  "K": "brewingTankBottomLeft",
+  "F": "brewingTankTopLeft",
+  "W": "brewingTankTopRight",
+  //valves
+  "1": "valveDecal1",
+  "2": "valveDecal2",
+  //decals
+  "3": "barrier",
+
 };
 
 class Level {
@@ -912,6 +925,7 @@ drawScreen(options) {
             let tileIndex = 0; // Index of the tile in the sprite sheet
 
             // Determine the tile's index based on its type
+            //tiles are 20x20 px + 1px padding on the left side
             switch(tile) {
               case "wall":
                 tileIndex = 0; // Assuming "wall" is the first sprite
@@ -957,6 +971,33 @@ drawScreen(options) {
                 break;
               case "exit":
                 tileIndex = 16;
+                break;
+              case "brewingTankSectionLeft":
+                tileIndex = 17;
+                break;
+              case "brewingTankSectionRight":
+                tileIndex = 18;
+                break;
+              case "brewingTankBottomLeft":
+                tileIndex = 19;
+                break;
+              case "brewingTankBottomRight":
+                tileIndex = 20;
+                break;
+              case "brewingTankTopLeft":
+                tileIndex = 21;
+                break;
+              case "brewingTankTopRight":
+                tileIndex = 22;
+                break;
+              case "valveDecal1":
+                tileIndex = 23;
+                break;
+              case "valveDecal2":
+                tileIndex = 24;
+                break;
+              case "barrier":
+                tileIndex = 25;
                 break;
             }
                // Calculate tileX considering the width, padding, and index
