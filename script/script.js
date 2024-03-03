@@ -9,6 +9,7 @@ const gameSettings = {
 };
 let paused = false;
 let introShown = false;
+let poweredUp = false;
 let totalDeaths = 0;
 let totalScore = 0;
 let scorePerLevel = 0; // Reset this at the start of each level
@@ -92,7 +93,7 @@ class Actor {
 }
 
 class Player extends Actor {
-  constructor(pos, speed, isDead = false, isPowered = false) {
+  constructor(pos, speed, isDead = false, isPowered = poweredUp) {
     super(pos, speed, isDead);
     this.score = 0;
     this.coinsCollected = 0;
@@ -558,8 +559,9 @@ PowerUp.prototype.collide = function(state) {
     return;
   } else {
     player.isPowered = true;
+    poweredUp = true;
     console.log("player is powered");
-    return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score);
+    return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score, isPowered = true);
   
   }
 };
@@ -582,7 +584,7 @@ Hoopa.prototype.collide = function(state) {
     }else if (!player.isDead && player.isPowered) {
       //player is not dead but depowered
       player.isPowered = false;
-      //player.isDead = false;
+      poweredUp = false;
       console.log("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
@@ -618,6 +620,7 @@ KeggaTroopa.prototype.collide = function(state) {
     } else if (!player.isDead && player.isPowered) {
       //player is not dead but depowered
       player.isPowered = false;
+      poweredUp = false;
       console.log("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
@@ -640,18 +643,19 @@ KeggaTroopa.prototype.collide = function(state) {
 
 
 class State {
-  constructor(level, actors, status, score = 0, exitReached = false) {
+  constructor(level, actors, status, score = 0, exitReached = false, isPowered) {
     this.level = level;
     this.actors = actors;
     this.status = status;
     //this.coinsCollected = coinsCollected;
     this.score = score;
     this.exitReached = exitReached; // Now part of the state
+    this.isPowered = isPowered;
 }
 
 
   static start(level) {
-    return new State(level, level.startActors, "playing",  this.score);
+    return new State(level, level.startActors, "playing",  this.score, this.isPowered);
   }
 
   get player() {
