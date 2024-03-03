@@ -552,13 +552,14 @@ Coin.prototype.collide = function(state) {
 PowerUp.prototype.collide = function(state) {
   console.log("powerup collided");
   let player = state.player;
+  let newState = updatePoints(state, this.pointValue);
 
   if(player.isPowered){
     return;
   } else {
     player.isPowered = true;
     console.log("player is powered");
-    return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
+    return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score);
   
   }
 };
