@@ -89,10 +89,12 @@ class Actor {
 }
 
 class Player extends Actor {
-  constructor(pos, speed, isDead = false) {
+  constructor(pos, speed, isDead = false, isPowered = false) {
     super(pos, speed, isDead);
     this.score = 0;
     this.coinsCollected = 0;
+    this.isPowered = true;
+
   
   }
 
@@ -909,6 +911,8 @@ drawPlayer(player, x, y, width, height) {
   width += gameSettings.actorXOverlap * 2;
   x -= gameSettings.actorXOverlap;
 
+  //add overalay for player if is powered up
+  
   // Determine whether to flip the player's sprite based on the player's x speed.
   if (player.speed.x != 0) {
     this.flipPlayer = player.speed.x < 0;
@@ -947,6 +951,13 @@ drawPlayer(player, x, y, width, height) {
     width,
     height
   );
+  // If the player is powered up, add an overlay effect
+  if (player.isPowered) {
+    this.cx.globalAlpha = 0.5; // Set transparency for the overlay
+    this.cx.fillStyle = "#FFD700"; // Gold color for the power-up overlay
+    this.cx.fillRect(x, y, width, height); // Draw the overlay rectangle
+    this.cx.globalAlpha = 1; // Reset transparency for other drawings
+  }
 
   // Restore the saved drawing state.
   this.cx.restore();
