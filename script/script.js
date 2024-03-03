@@ -26,10 +26,12 @@ function createSprite(src) {
 
 var otherSprites = createSprite("img/sprites.png");
 var playerSprites = createSprite("img/player.png");
+var poweredUpPlayerSprites = createSprite("img/playerPoweredUp.png");
 var hoopaSprites = createSprite("img/hoopa.png");
 var keggaSprites = createSprite("img/kegga.png");
 
 function actorOverlap(actor1, actor2) {
+  console.log("checking the actor overlap" + actor1 + " " + actor2);
   // Check if either actor is non-interactable or if they are the same actor
   if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
       return false;
@@ -60,6 +62,7 @@ var arrowKeys = trackKeys([
   "ArrowLeft",
   "ArrowRight",
   "ArrowUp",
+  " " //shooting with space will alter this later
 ]);
 
 
@@ -93,7 +96,7 @@ class Player extends Actor {
     super(pos, speed, isDead);
     this.score = 0;
     this.coinsCollected = 0;
-    this.isPowered = true;
+    this.isPowered = isPowered;
 
   
   }
@@ -138,6 +141,14 @@ Player.prototype.update = function(time, state, keys) {
   } else {
     this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
   }
+  // Handle shooting
+  if (keys[" "] && this.isPowered) {
+    let speed = this.flipPlayer ? -10 : 10; // Direction based on player facing
+    let projectile = Projectile.create(this.pos, speed);
+    state.actors.push(projectile); // Add the projectile to the actors array
+    keys[" "] = false; // Prevent continuous shooting
+  }
+
 
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
@@ -156,6 +167,48 @@ Player.prototype.isOnGround = function(state) {
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");
 };
+
+class Projectile extends Actor {
+  constructor(pos, speed) {
+    super(pos, new Vec(speed, 0)); // Projectiles move horizontally initially
+    this.bounce = 0; // Tracks the number of bounces
+    this.maxBounces = 3; // Maximum number of bounces before disappearing
+  }
+
+  get type() {
+    return "projectile";
+  }
+
+  static create(pos, speed) {
+    return new Projectile(pos.plus(new Vec(0.5, 0)), speed);
+  }
+
+  update(time, state) {
+    let newPos = this.pos.plus(this.speed.times(time));
+    let hit = state.level.touches(newPos, this.size, "wall");
+    
+    if (hit) {
+      this.bounce++;
+      if (this.bounce > this.maxBounces) {
+        this.remove = true; // Remove the projectile after max bounces
+        return this;
+      }
+      // Invert the horizontal speed to "bounce" off the wall
+      this.speed = new Vec(-this.speed.x, this.speed.y);
+    }
+
+    // Bounce off the floor or ceiling
+    hit = state.level.touches(newPos, this.size, "wall") || state.level.touches(newPos, this.size, "stone");
+    if (hit) {
+      // Invert the vertical speed to "bounce" off the floor/ceiling
+      this.speed = new Vec(this.speed.x, -this.speed.y);
+    }
+
+    newPos = this.pos.plus(this.speed.times(time)); // Recalculate position after bounce
+    return new Projectile(newPos, this.speed);
+  }
+}
+
 
 
 class Lava {
@@ -907,18 +960,13 @@ drawScreen(options) {
  * @param {float} height The height of the player's sprite.
  */
 drawPlayer(player, x, y, width, height) {
-  // Adjust the width and x-coordinate based on the player's overlap.
   width += gameSettings.actorXOverlap * 2;
   x -= gameSettings.actorXOverlap;
 
-  //add overalay for player if is powered up
-  
-  // Determine whether to flip the player's sprite based on the player's x speed.
   if (player.speed.x != 0) {
     this.flipPlayer = player.speed.x < 0;
   }
 
-  // Choose a tile from the player's sprite sheet based on the player's speed.
   let tile = 8;
   if (player.speed.y != 0) {
     tile = 9;
@@ -928,40 +976,46 @@ drawPlayer(player, x, y, width, height) {
     tile = 10;
   }
 
-  // Save the current drawing state.
   this.cx.save();
 
-  // If the player's sprite should be flipped, flip it horizontally.
   if (this.flipPlayer) {
     this.flipHorizontally(x + width / 2);
   }
 
-  // Calculate the x-coordinate of the left edge of the tile on the sprite sheet.
   let tileX = tile * width;
 
-  // Draw the chosen tile at the calculated position.
-  this.cx.drawImage(
-    playerSprites,
-    tileX,
-    0,
-    width,
-    height,
-    x,
-    y,
-    width,
-    height
-  );
-  // If the player is powered up, add an overlay effect
-  if (player.isPowered) {
-    this.cx.globalAlpha = 0.5; // Set transparency for the overlay
-    this.cx.fillStyle = "#FFD700"; // Gold color for the power-up overlay
-    this.cx.fillRect(x, y, width, height); // Draw the overlay rectangle
-    this.cx.globalAlpha = 1; // Reset transparency for other drawings
-  }
+  // Choose the appropriate spritesheet based on the player's powered-up state.
+  let spriteSheet = player.isPowered ? poweredUpPlayerSprites : playerSprites;
 
-  // Restore the saved drawing state.
+  // Draw the player sprite using the selected spritesheet.
+  this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
+
   this.cx.restore();
 }
+
+/**
+ * Draws the projectile on the canvas.
+ *
+ * @param {Projectile} projectile The projectile object, which includes properties for position and speed.
+ * @param {int} x The x-coordinate where the projectile should be drawn.
+ * @param {int} y The y-coordinate where the projectile should be drawn.
+ * @param {float} width The width of the projectile.
+ * @param {float} height The height of the projectile.
+ */
+drawProjectile(projectile, x, y, width, height) {
+  const size = 5; // 5 pixels for both width and height
+
+  x += (projectile.size.x * gameSettings.scale - size) / 2;
+  y += (projectile.size.y * gameSettings.scale - size) / 2;
+  this.cx.fillStyle = 'red'; // red color for the projectile
+
+  // red rectangle for the projectile
+  this.cx.fillRect(x, y, width, height);
+
+  // Once I have a sprite image for the projectile
+  // this.cx.drawImage(projectileSprite, x, y, width, height);
+}
+
 
 /**
  * Draws the Hoopa on the canvas.
@@ -1079,40 +1133,28 @@ drawKegga(keggaTroopa, x, y, width, height) {
   this.cx.restore();
 }
 
-  drawActors(actors) {
-    for (let actor of actors) {
-      let width = actor.size.x * gameSettings.scale;
-      let height = actor.size.y * gameSettings.scale;
-      let x = (actor.pos.x - this.viewport.left) * gameSettings.scale;
-      let y = (actor.pos.y - this.viewport.top) * gameSettings.scale;
-      if (actor.type == "player") {
-        this.drawPlayer(actor, x, y, width, height);
-      }
-      else if (actor.type == "hoopa") {
-        this.drawHoopa(actor, x, y-10, width, height+10);
-      }
-      else if (actor.type == "keggaTroopa") {
-        this.drawKegga(actor, x, y, width, height);
-      }
-      else {
-        let tileX = (actor.type == "coin" ? 2 : 1) * gameSettings.scale;
-        let spriteWidth = actor.type == "coin" ? width * 0.72 : width; 
-
-        //console.debug(`Drawing ${actor.type} at (${x}, ${y}) with size (${width}, ${height}) from spritesheet position (${tileX}, 0)`);
-        this.cx.drawImage(
-          otherSprites,
-          tileX,
-          0,
-          spriteWidth,
-          height,
-          x,
-          y,
-          spriteWidth,
-          height
-        );
-      }
+drawActors(actors) {
+  for (let actor of actors) {
+    let width = actor.size.x * gameSettings.scale;
+    let height = actor.size.y * gameSettings.scale;
+    let x = (actor.pos.x - this.viewport.left) * gameSettings.scale;
+    let y = (actor.pos.y - this.viewport.top) * gameSettings.scale;
+    if (actor.type == "player") {
+      this.drawPlayer(actor, x, y, width, height);
+    } else if (actor.type == "hoopa") {
+      this.drawHoopa(actor, x, y - 10, width, height + 10); // Adjusted for Hoopa's smaller size
+    } else if (actor.type == "keggaTroopa") {
+      this.drawKegga(actor, x, y, width, height);
+    } else if (actor.type == "projectile") {
+      this.drawProjectile(actor, x, y, width, height); // Drawing projectiles
+    } else {
+      // Drawing other actors like coins, using their sprite positions
+      let tileX = (actor.type == "coin" ? 2 : 1) * gameSettings.scale;
+      let spriteWidth = actor.type == "coin" ? width * 0.72 : width;
+      this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, spriteWidth, height);
     }
   }
+}
 
   flipHorizontally(around) {
     this.cx.translate(around, 0);
@@ -1244,6 +1286,7 @@ function trackKeys(keys) {
   function track(event) {
     if (keys.includes(event.key)) {
       let state = event.type == "keydown";
+      console.log(event.key, state);
       if (state && !down[event.key]) {
         pressed[event.key] = true; // Mark as freshly pressed if it wasn't down before
       }
