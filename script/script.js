@@ -891,57 +891,79 @@ drawScreen(options) {
 
   drawBackground(level) {
     // Ensure the viewport is initialized
+    let padding = 1; // 1 pixel of padding on the right side of each sprite
+    this.cx.imageSmoothingEnabled = false;
     this.initializeLevel(level);
     this.cx.fillStyle = "rgb(135, 206, 235)"; // Light blue color, similar to sky blue
     this.cx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     let { left, top, width, height } = this.viewport;
-    let xStart = Math.floor(left);
-    let xEnd = Math.ceil(left + width);
-    let yStart = Math.floor(top);
-    let yEnd = Math.ceil(top + height);
 
-    for (let y = yStart; y < yEnd; y++) {
-        for (let x = xStart; x < xEnd; x++) {
+    for (let y = Math.floor(top); y < Math.ceil(top + height); y++) {
+        for (let x = Math.floor(left); x < Math.ceil(left + width); x++) {
             if (y < 0 || y >= level.rows.length || x < 0 || x >= level.rows[y].length) {
                 continue; // Skip tiles outside the level bounds
             }
             let tile = level.rows[y][x];
             if (tile == "empty") continue;
-            let screenX = (x - left) * gameSettings.scale;
-            let screenY = (y - top) * gameSettings.scale;
+            
+            let screenX = Math.round((x - left) * gameSettings.scale); // Round to avoid subpixel rendering
+            let screenY = Math.round((y - top) * gameSettings.scale); // Round to avoid subpixel rendering
+            let tileIndex = 0; // Index of the tile in the sprite sheet
 
-            // Draw the tile based on its type
-                let tileX = (tile == "lava") ? gameSettings.scale : 0;
-                if (tile == "stone") {
-                    tileX = 3.65 * gameSettings.scale; // % in spritesheet
-                }else if (tile == "exit"){
-                  tileX = 16.2 * gameSettings.scale; // E in spritesheet
-                }
-                else if (tile == "bridge") {
-                    tileX = 5.2 * gameSettings.scale; // B in spritesheet
-                } else if (tile == "pipeTopLeft") {
-                    tileX = 6.2 * gameSettings.scale; // T in spritesheet
-                } else if (tile == "pipeTopRight") {
-                    tileX = 7.2 * gameSettings.scale; // U in spritesheet
-                } else if (tile == "pipeBodyLeft") {
-                    tileX = 8.2 * gameSettings.scale; // [ in spritesheet
-                } else if (tile == "pipeBodyRight") {
-                    tileX = 9.2 * gameSettings.scale; // ] in spritesheet
-                } else if (tile == "pipeUpperCornerLeft") {
-                    tileX = 10.2 * gameSettings.scale; // L in spritesheet
-                } else if (tile == "pipeLowerCornerLeft") {
-                    tileX = 11.2 * gameSettings.scale; // R in spritesheet
-                } else if (tile == "pipeTopHorizontalUpper") {
-                    tileX = 12.2 * gameSettings.scale; // O in spritesheet
-                } else if (tile == "pipeTopHorizontalLower") {
-                    tileX = 13.2 * gameSettings.scale; // P in spritesheet
-                } else if (tile == "pipeBodyHorizontalUpper") {
-                    tileX = 14.2 * gameSettings.scale; // Q in spritesheet
-                } else if (tile == "pipeBodyHorizontalLower") {
-                    tileX = 15.2 * gameSettings.scale; // S in spritesheet
-                }
-                this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
+            // Determine the tile's index based on its type
+            switch(tile) {
+              case "wall":
+                tileIndex = 0; // Assuming "wall" is the first sprite
+                break;
+              case "lava":
+                tileIndex = 1; // Assuming "lava" is the second sprite
+                break;
+              case "stone":
+                tileIndex = 4; // Assuming "stone" is the fifth sprite
+                  break;
+              case "bridge":
+                tileIndex = 5; // Assuming "bridge" is the sixth sprite
+                break;
+              case "pipeTopLeft":
+                tileIndex = 6; // Assuming "pipeTopLeft" is the seventh sprite
+                break;
+              case "pipeTopRight":
+                tileIndex = 7; // Assuming "pipeTopRight" is the eighth sprite
+                break;
+              case "pipeBodyLeft":
+                tileIndex = 8; // Assuming "pipeBodyLeft" is the ninth sprite
+                break;
+              case "pipeBodyRight":
+                tileIndex = 9; // Assuming "pipeBodyRight" is the tenth sprite
+                break;
+              case "pipeUpperCornerLeft":
+                tileIndex = 10; // Assuming "pipeUpperCornerLeft" is the eleventh sprite
+                break;
+              case "pipeLowerCornerLeft":
+                tileIndex = 11; // Assuming "pipeLowerCornerLeft" is the twelfth sprite
+                break;
+              case "pipeTopHorizontalUpper":
+                tileIndex = 12; // Assuming "pipeTopHorizontalUpper" is the thirteenth sprite
+                break;
+              case "pipeTopHorizontalLower":
+                tileIndex = 13; // Assuming "pipeTopHorizontalLower" is the fourteenth sprite
+                break;
+              case "pipeBodyHorizontalUpper":
+                tileIndex = 14; // Assuming "pipeBodyHorizontalUpper" is the fifteenth sprite
+                break;
+              case "pipeBodyHorizontalLower":
+                tileIndex = 15; // Assuming "pipeBodyHorizontalLower" is the sixteenth sprite
+                break;
+              case "exit":
+                tileIndex = 16;
+                break;
+            }
+               // Calculate tileX considering the width, padding, and index
+            let tileX = tileIndex * (gameSettings.scale + padding);
+
+            // Draw the tile
+            this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
               }
             }
     }
@@ -1140,7 +1162,7 @@ drawActors(actors) {
     let x = (actor.pos.x - this.viewport.left) * gameSettings.scale;
     let y = (actor.pos.y - this.viewport.top) * gameSettings.scale;
     if (actor.type == "player") {
-      this.drawPlayer(actor, x, y, width, height);
+      this.drawPlayer(actor, x, y, width, height + 1); // Adkisted for Player that has no 1 tile size
     } else if (actor.type == "hoopa") {
       this.drawHoopa(actor, x, y - 10, width, height + 10); // Adjusted for Hoopa's smaller size
     } else if (actor.type == "keggaTroopa") {
@@ -1150,8 +1172,8 @@ drawActors(actors) {
     } else {
       // Drawing other actors like coins, using their sprite positions
       let tileX = (actor.type == "coin" ? 2 : 1) * gameSettings.scale;
-      let spriteWidth = actor.type == "coin" ? width * 0.72 : width;
-      this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, spriteWidth, height);
+      let spriteWidth = actor.type == "coin" ? width * 0.75 : width;
+      this.cx.drawImage(otherSprites, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
     }
   }
 }
