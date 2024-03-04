@@ -27,12 +27,13 @@ function createSprite(src) {
 
 var otherSprites = createSprite("img/sprites.png");
 var playerSprites = createSprite("img/player.png");
+var conveyorBeltSprites = createSprite("img/conveyor.png");
 var poweredUpPlayerSprites = createSprite("img/playerPoweredUp.png");
 var hoopaSprites = createSprite("img/hoopa.png");
 var keggaSprites = createSprite("img/kegga.png");
 
 function actorOverlap(actor1, actor2) {
-  console.debug("checking the actor overlap" + actor1 + " " + actor2);
+  //console.debug("checking the actor overlap" + actor1.type + " " + actor2.type);
   // Check if either actor is non-interactable or if they are the same actor
   if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
       return false;
@@ -89,6 +90,7 @@ class Actor {
     this.isDead = isDead;
     this.interactable = true;
     this.deadTime = deadTime || 0;
+    this.onConveyorBelt = undefined;
   }
 }
 
@@ -98,9 +100,7 @@ class Player extends Actor {
     this.score = 0;
     this.coinsCollected = 0;
     this.isPowered = isPowered;
-    this.onConveyorBelt = undefined;
 
-  
   }
 
   get type() {
@@ -321,6 +321,13 @@ Hoopa.prototype.update = function(time, state) {
   let xSpeed = this.speed.x;
   let pos = this.pos;
 
+    // Apply conveyor belt speed if on a conveyor belt
+    if (this.onConveyorBelt !== undefined) {
+      console.log("hoopa is on conveyor belt");
+      xSpeed += this.onConveyorBelt;
+      //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
+    }
+
   // Use moveActor for horizontal movement, reversing direction on collision
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (pos.x === newPos.x) {
@@ -385,6 +392,13 @@ KeggaTroopa.prototype.update = function(time, state) {
 
   let xSpeed = this.speed.x;
   let pos = this.pos;
+
+    // Apply conveyor belt speed if on a conveyor belt
+    if (this.onConveyorBelt !== undefined) {
+      xSpeed += this.onConveyorBelt;
+      console.log("kegga is on conveyor belt");
+      //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
+    }
 
   // Use moveActor for horizontal movement, reversing direction on collision
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
@@ -517,7 +531,7 @@ class Level {
         if (type === "wall" && (here === "wall" || here === "stone" ||
           here === "pipeTopLeft" || here === "pipeTopRight" || here === "pipeBodyLeft" || here === "pipeBodyRight" || 
           here === "pipeUpperCornerLeft" || here === "pipeLowerCornerLeft" || here === "pipeTopHorizontalUpper" || here === "pipeTopHorizontalLower" ||
-          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower" || here === "conveyorBelt")) return true;
+          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower" )) return true;
         if (here == type) return true;
       }
     }
@@ -559,14 +573,34 @@ if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaT
 }
 
 ConveyorBelt.prototype.collide = function(state) {
-  let player = state.player;
+  /*let player = state.player;
   if (player.type == "player" && overlap(this, player)) {
     console.log("player is on conveyor belt");
     player.onConveyorBelt = this.speed.x; // Set a flag indicating the player is on the conveyor belt
   }
-  return new State(state.level, state.actors, state.status, state.score);
+  return new State(state.level, state.actors, state.status, state.score);*/
+ // Temporarily store the actors to modify their properties if needed
+ let updatedActors = state.actors.map(actor => {
+  // Skip if we're checking the conveyor belt against itself or the actor is not one of the specified types
+  if (actor === this || !(actor instanceof Hoopa || actor instanceof KeggaTroopa || actor instanceof Player)) {
+    return actor; // Return the actor unmodified
+  }
 
+  // Check if the actor overlaps with the conveyor belt
+  if (actorOverlap(this, actor)) {
+    console.log(actor.type + " is on conveyor belt");
+    // Create a modified copy of the actor with the onConveyorBelt property set
+    actor.onConveyorBelt = this.speed.x;
+    return actor; // Return the modified actor
+  }
+
+  return actor; // Return the actor unmodified if no overlap
+});
+
+// Return a new state with the updated actors
+return new State(state.level, updatedActors, state.status, state.score);
 };
+  
 
 Lava.prototype.collide = function(state) {
   let player = state.player;
@@ -1258,13 +1292,28 @@ drawActors(actors) {
       // Use the full width for powerup sprites
       this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, width, height);
     }else if (actor.type == "conveyorBelt") {
-      // Draw conveyor belt as a solid white square
-      this.cx.fillStyle = 'white';
-      this.cx.fillRect(x, y, width, height);
+      let frame = Math.floor(Date.now() / 100) % 3; // Change frame every 100ms, cycle through 3 frames
+      let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
+      let sy = 0; // Assuming all frames are on the same row in the sprite sheet
+      let sWidth = 20; // Source width (sprite width)
+      let sHeight = 20; // Source height (sprite height)
+      let dx = x; // Destination x-coordinate on the canvas
+      let dy = y; // Destination y-coordinate on the canvas
+      let dWidth = width; // Destination width
+      let dHeight = height + 10; // Destination height
+    
+      this.cx.save(); // Save the current state
+      if (actor.speed.x > 0) { // If the conveyor belt is moving left
+        this.cx.translate(dx + dWidth / 2, dy + dHeight / 2); // Translate to the center of the conveyor belt
+        this.cx.scale(-1, 1); // Flip horizontally
+        this.cx.translate(-(dx + dWidth / 2), -(dy + dHeight / 2)); // Translate back
+      }
+    
+      this.cx.drawImage(conveyorBeltSprites, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+      this.cx.restore(); // Restore the state
+    }    
   }
 }
-}
-
 
   flipHorizontally(around) {
     this.cx.translate(around, 0);
