@@ -573,13 +573,6 @@ if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaT
 }
 
 ConveyorBelt.prototype.collide = function(state) {
-  /*let player = state.player;
-  if (player.type == "player" && overlap(this, player)) {
-    console.log("player is on conveyor belt");
-    player.onConveyorBelt = this.speed.x; // Set a flag indicating the player is on the conveyor belt
-  }
-  return new State(state.level, state.actors, state.status, state.score);*/
- // Temporarily store the actors to modify their properties if needed
  let updatedActors = state.actors.map(actor => {
   // Skip if we're checking the conveyor belt against itself or the actor is not one of the specified types
   if (actor === this || !(actor instanceof Hoopa || actor instanceof KeggaTroopa || actor instanceof Player)) {
@@ -588,10 +581,10 @@ ConveyorBelt.prototype.collide = function(state) {
 
   // Check if the actor overlaps with the conveyor belt
   if (actorOverlap(this, actor)) {
-    console.log(actor.type + " is on conveyor belt");
-    // Create a modified copy of the actor with the onConveyorBelt property set
-    actor.onConveyorBelt = this.speed.x;
-    return actor; // Return the modified actor
+    console.log(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
+    // Create a new instance of the actor with the updated onConveyorBelt property
+    let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { onConveyorBelt: this.speed.x });
+    return updatedActor; // Return the modified actor
   }
 
   return actor; // Return the actor unmodified if no overlap
