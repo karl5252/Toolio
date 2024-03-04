@@ -116,25 +116,26 @@ Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
-  if (this.onConveyorBelt !== undefined) {
-    console.log("player is on conveyor belt and his speed is affected by it. " + this.onConveyorBelt + "  " + xSpeed + ")");
-    xSpeed += this.onConveyorBelt; // Add conveyor belt speed to player's speed
-    this.onConveyorBelt = undefined; // Reset the flag after applying the speed
-  }
-  // Prevent horizontal movement if the player is dead
+
+  // Handle player input
   if (!this.isDead) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
   }
 
-  // Apply horizontal movement only if the player is not dead
+  // Apply conveyor belt speed if on a conveyor belt
+  if (this.onConveyorBelt !== undefined) {
+    xSpeed += this.onConveyorBelt;
+    //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
+  }
+
+  // Apply horizontal movement
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (newPos.x !== this.pos.x) {
     this.pos = newPos; // Update position if horizontal movement occurred
   }
 
   let ySpeed = this.speed.y + time * gameSettings.gravity;
-
   // Check for jump input and apply jump force if on the ground
   if (!this.isDead && keys.isPressed("ArrowUp") && this.isOnGround(state)) {
     ySpeed = -gameSettings.jumpSpeed;
@@ -148,19 +149,18 @@ Player.prototype.update = function(time, state, keys) {
   } else {
     this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
   }
-  
+
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
     playerLives -= 1;
     totalDeaths += 1;
-    // When player is marked as dead, make them drop to the ground
-    this.speed.y = gameSettings.gravity; // Set a positive ySpeed to simulate falling
+    this.speed.y = gameSettings.gravity; // Simulate falling when dead
   }
-
 
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered);
 };
+
 
 Player.prototype.isOnGround = function(state) {
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
@@ -252,9 +252,9 @@ class ConveyorBelt extends Actor {
 
   static create(pos, ch) {
     if (ch == "<") {
-      return new ConveyorBelt(pos, new Vec(-2, 0)); // Moving left
+      return new ConveyorBelt(pos, new Vec(-5, 0)); // Moving left
     } else if (ch == ">") {
-      return new ConveyorBelt(pos, new Vec(2, 0)); // Moving right
+      return new ConveyorBelt(pos, new Vec(5, 0)); // Moving right
     }
   }
 }
@@ -560,7 +560,7 @@ if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaT
 
 ConveyorBelt.prototype.collide = function(state) {
   let player = state.player;
-  if (player.type == "player" && player.pos.y + player.size.y < this.pos.y + 0.1) {
+  if (player.type == "player" && overlap(this, player)) {
     console.log("player is on conveyor belt");
     player.onConveyorBelt = this.speed.x; // Set a flag indicating the player is on the conveyor belt
   }
