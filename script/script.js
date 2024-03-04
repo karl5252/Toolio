@@ -98,6 +98,7 @@ class Player extends Actor {
     this.score = 0;
     this.coinsCollected = 0;
     this.isPowered = isPowered;
+    this.onConveyorBelt = undefined;
 
   
   }
@@ -115,6 +116,11 @@ Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
+  if (this.onConveyorBelt !== undefined) {
+    console.log("player is on conveyor belt and his speed is affected by it. " + this.onConveyorBelt + "  " + xSpeed + ")");
+    xSpeed += this.onConveyorBelt; // Add conveyor belt speed to player's speed
+    this.onConveyorBelt = undefined; // Reset the flag after applying the speed
+  }
   // Prevent horizontal movement if the player is dead
   if (!this.isDead) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
@@ -234,6 +240,33 @@ class PowerUp {
                     this.basePos, wobble);
   };
 }
+
+class ConveyorBelt extends Actor {
+  constructor(pos, speed) {
+    super(pos, speed);
+  }
+
+  get type() {
+    return "conveyorBelt";
+  }
+
+  static create(pos, ch) {
+    if (ch == "<") {
+      return new ConveyorBelt(pos, new Vec(-2, 0)); // Moving left
+    } else if (ch == ">") {
+      return new ConveyorBelt(pos, new Vec(2, 0)); // Moving right
+    }
+  }
+}
+
+ConveyorBelt.prototype.size = new Vec(1, 0.5);
+
+ConveyorBelt.prototype.update = function(time) {
+  // Conveyor belts might not need to update themselves since they are stationary
+  return this;
+};
+
+
 
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
@@ -409,6 +442,7 @@ state.actors.forEach(actor => {
 
 
 var levelChars = {
+  // Add new level characters here
   ".": "empty",
   "%": "stone",
   "#": "wall",
@@ -420,6 +454,8 @@ var levelChars = {
   "v": Lava,
   "m": Hoopa,
   "n": KeggaTroopa,
+  "<": ConveyorBelt,
+  ">": ConveyorBelt,
   "E": "exit", // The exit is represented by E in the level plan
   "B": "bridge", // Bridge section should affect collision. Player walks on top of it.
   "T": "pipeTopLeft",
@@ -481,7 +517,7 @@ class Level {
         if (type === "wall" && (here === "wall" || here === "stone" ||
           here === "pipeTopLeft" || here === "pipeTopRight" || here === "pipeBodyLeft" || here === "pipeBodyRight" || 
           here === "pipeUpperCornerLeft" || here === "pipeLowerCornerLeft" || here === "pipeTopHorizontalUpper" || here === "pipeTopHorizontalLower" ||
-          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower")) return true;
+          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower" || here === "conveyorBelt")) return true;
         if (here == type) return true;
       }
     }
@@ -521,6 +557,16 @@ if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaT
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
          actor1.pos.y < actor2.pos.y + actor2.size.y;
 }
+
+ConveyorBelt.prototype.collide = function(state) {
+  let player = state.player;
+  if (player.type == "player" && player.pos.y + player.size.y < this.pos.y + 0.1) {
+    console.log("player is on conveyor belt");
+    player.onConveyorBelt = this.speed.x; // Set a flag indicating the player is on the conveyor belt
+  }
+  return new State(state.level, state.actors, state.status, state.score);
+
+};
 
 Lava.prototype.collide = function(state) {
   let player = state.player;
@@ -1211,8 +1257,12 @@ drawActors(actors) {
       let tileX = 27.2 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
       this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, width, height);
-    }
+    }else if (actor.type == "conveyorBelt") {
+      // Draw conveyor belt as a solid white square
+      this.cx.fillStyle = 'white';
+      this.cx.fillRect(x, y, width, height);
   }
+}
 }
 
 
