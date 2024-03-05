@@ -95,11 +95,12 @@ class Actor {
 }
 
 class Player extends Actor {
-  constructor(pos, speed, isDead = false, isPowered = poweredUp) {
+  constructor(pos, speed, isDead = false, isPowered = poweredUp, deathPhase = 0) {
     super(pos, speed, isDead);
     this.score = 0;
     this.coinsCollected = 0;
     this.isPowered = isPowered;
+    this.deathPhase = deathPhase;
 
   }
 
@@ -116,17 +117,17 @@ Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
-
-  // Handle player input
   if (!this.isDead) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
+  } else {
+    // Handle death animation
+    this.handleDeathAnimation(time);
   }
 
   // Apply conveyor belt speed if on a conveyor belt
   if (this.onConveyorBelt !== undefined) {
     xSpeed += this.onConveyorBelt;
-    //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
   }
 
   // Apply horizontal movement
@@ -135,11 +136,15 @@ Player.prototype.update = function(time, state, keys) {
     this.pos = newPos; // Update position if horizontal movement occurred
   }
 
-  let ySpeed = this.speed.y + time * gameSettings.gravity;
-  // Check for jump input and apply jump force if on the ground
-  if (!this.isDead && keys.isPressed("ArrowUp") && this.isOnGround(state)) {
-    ySpeed = -gameSettings.jumpSpeed;
+  let ySpeed = this.speed.y;
+  if (!this.isDead) {
+    // Normal gravity and jump logic
+    ySpeed += time * gameSettings.gravity;
+    if (keys.isPressed("ArrowUp") && this.isOnGround(state)) {
+      ySpeed = -gameSettings.jumpSpeed;
+    }
   }
+  // No need for an 'else' clause here as the death animation logic is already applied above
 
   // Apply vertical movement due to gravity or jump
   newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
@@ -157,11 +162,13 @@ Player.prototype.update = function(time, state, keys) {
     poweredUp = false;
     playerLives -= 1;
     totalDeaths += 1;
-    this.speed.y = gameSettings.gravity; // Simulate falling when dead
+    this.deathPhase = 0; // Ensure the death animation starts from the beginning
   }
-    
-  return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered);
+
+  return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
 };
+
+
 
 
 Player.prototype.isOnGround = function(state) {
@@ -169,6 +176,41 @@ Player.prototype.isOnGround = function(state) {
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");
 };
+
+Player.prototype.handleDeathAnimation = function(time) {
+    switch (this.deathPhase) {
+      case 0:
+        console.log("Player is dead");
+        console.log("Before update: ", this.pos.y);
+
+        console.log("Player jumps up...");
+        //this.pos.y += this.speed.y * time;
+
+        this.speed.y = -gameSettings.jumpSpeed * 2; // 2 tiles high jump
+        console.log("Player y speed " + this.speed.y + " time " + time);
+        this.deathPhase = 1;
+        console.log("After update: ", this.pos.y);
+
+        break;
+      case 1:
+        // Falling phase after the jump
+        console.log("Player falls down...");
+        console.log("Before update: ", this.pos.y);
+
+        if (this.speed.y >= 0) { // Check if the player is coming down
+          this.speed.y += gameSettings.gravity * time * 5; // Accelerate downwards
+          if (this.pos.y > gameSettings.canvasHeight / gameSettings.scale) { // If the player falls off the screen
+            //this.deathPhase = 2; // End of animation
+            console.log("After update: ", this.pos.y);
+
+          }
+        }
+        break;
+      case 2:
+        // The player has fallen off the screen, handle game over or respawn logic here
+        break;
+    }
+  }
 
 class Lava {
   constructor(pos, speed, reset) {
@@ -571,9 +613,9 @@ ConveyorBelt.prototype.collide = function(state) {
 
   // Check if the actor overlaps with the conveyor belt
   if (actorOverlap(this, actor)) {
-    console.log(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
+    console.debug(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
     // Create a new instance of the actor with the updated onConveyorBelt property
-    console.log(actor.speed.x);
+    console.debug(actor.speed.x);
     let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { onConveyorBelt: this.speed.x });
     return updatedActor; // Return the modified actor
   }
@@ -617,7 +659,7 @@ Coin.prototype.collide = function(state) {
 };
 
 PowerUp.prototype.collide = function(state) {
-  console.log("powerup collided");
+  console.debug("powerup collided");
   let player = state.player;
   let newState = updatePoints(state, this.pointValue);
 
@@ -626,7 +668,7 @@ PowerUp.prototype.collide = function(state) {
   } else {
     player.isPowered = true;
     poweredUp = true;
-    console.log("player is powered");
+    console.debug("player is powered");
     return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score, isPowered = true);
   
   }
@@ -651,7 +693,7 @@ Hoopa.prototype.collide = function(state) {
       //player is not dead but depowered
       player.isPowered = false;
       poweredUp = false;
-      console.log("player is depowered now");
+      console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
     } 
@@ -660,7 +702,7 @@ Hoopa.prototype.collide = function(state) {
       player.isDead = true;
       totalDeaths += 1;
       playerLives -= 1;
-      console.log("Player is dead, remaining lives: " + playerLives);
+      console.debug("Player is dead, remaining lives: " + playerLives);
       return new State(state.level, state.actors.filter(a => a != this), "lost", state.score);
     }
   }
@@ -687,7 +729,7 @@ KeggaTroopa.prototype.collide = function(state) {
       //player is not dead but depowered
       player.isPowered = false;
       poweredUp = false;
-      console.log("player is depowered now");
+      console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
     } else if (!player.isDead) { // Check if the player is not already dead
