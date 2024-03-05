@@ -33,7 +33,7 @@ var hoopaSprites = createSprite("img/hoopa.png");
 var keggaSprites = createSprite("img/kegga.png");
 
 function actorOverlap(actor1, actor2) {
-  //console.debug("checking the actor overlap" + actor1.type + " " + actor2.type);
+  //console.log("checking the actor overlap actor1:" + actor1.type + " actor2: " + actor2.type); //uncomment for debugging only
   // Check if either actor is non-interactable or if they are the same actor
   if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
       return false;
@@ -153,11 +153,13 @@ Player.prototype.update = function(time, state, keys) {
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
+    this.isPowered = false;
+    poweredUp = false;
     playerLives -= 1;
     totalDeaths += 1;
     this.speed.y = gameSettings.gravity; // Simulate falling when dead
   }
-
+    
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered);
 };
 
@@ -321,13 +323,7 @@ Hoopa.prototype.update = function(time, state) {
   let xSpeed = this.speed.x;
   let pos = this.pos;
 
-    // Apply conveyor belt speed if on a conveyor belt
-    if (this.onConveyorBelt !== undefined) {
-      console.log("hoopa is on conveyor belt");
-      xSpeed += this.onConveyorBelt;
-      //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
-    }
-
+ 
   // Use moveActor for horizontal movement, reversing direction on collision
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (pos.x === newPos.x) {
@@ -393,12 +389,6 @@ KeggaTroopa.prototype.update = function(time, state) {
   let xSpeed = this.speed.x;
   let pos = this.pos;
 
-    // Apply conveyor belt speed if on a conveyor belt
-    if (this.onConveyorBelt !== undefined) {
-      xSpeed += this.onConveyorBelt;
-      console.log("kegga is on conveyor belt");
-      //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
-    }
 
   // Use moveActor for horizontal movement, reversing direction on collision
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
@@ -556,14 +546,14 @@ function overlap(actor1, actor2) {
     if (!actor1.interactable || !actor2.interactable) {
       return false;
     }
-    if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
+    /*if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
     (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
   console.debug("kegga is sliding and overlaps with hoppa");
 } 
 if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
   actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
   console.debug("kegga is sliding and overlaps with another kegga");
-  }
+  }*/
  
 
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
@@ -583,6 +573,7 @@ ConveyorBelt.prototype.collide = function(state) {
   if (actorOverlap(this, actor)) {
     console.log(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
     // Create a new instance of the actor with the updated onConveyorBelt property
+    console.log(actor.speed.x);
     let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { onConveyorBelt: this.speed.x });
     return updatedActor; // Return the modified actor
   }
@@ -701,7 +692,6 @@ KeggaTroopa.prototype.collide = function(state) {
         player.isDead = true;
         totalDeaths += 1;
         playerLives -= 1;
-        //player.interactable = false; // Make the player non-interactable
         console.debug("Player is dead, remaining lives: " + playerLives);
       }
 
@@ -755,6 +745,14 @@ class State {
 
     if (newState.level.touches(player.pos, player.size, "lava")) {
       return new State(newState.level, actors, "lost", newState.score, newState.exitReached);
+    }
+    
+    for (let actor of actors) {
+      //add update of stae for covneyor and actors
+      if (actor instanceof ConveyorBelt) {
+        newState = actor.collide(newState);
+      }
+
     }
 
     for (let actor of actors) {
