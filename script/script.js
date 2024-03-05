@@ -590,6 +590,8 @@ Lava.prototype.collide = function(state) {
   let player = state.player;
   if (!player.isDead) { // Check if the player is not already dead
     player.isDead = true;
+    player.isPowered = false;
+    poweredUp = false;
     totalDeaths += 1;
     playerLives -= 1;
     //player.interactable = false; // Make the player non-interactable
