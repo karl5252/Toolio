@@ -27,12 +27,13 @@ function createSprite(src) {
 
 var otherSprites = createSprite("img/sprites.png");
 var playerSprites = createSprite("img/player.png");
+var conveyorBeltSprites = createSprite("img/conveyor.png");
 var poweredUpPlayerSprites = createSprite("img/playerPoweredUp.png");
 var hoopaSprites = createSprite("img/hoopa.png");
 var keggaSprites = createSprite("img/kegga.png");
 
 function actorOverlap(actor1, actor2) {
-  console.debug("checking the actor overlap" + actor1 + " " + actor2);
+  //console.log("checking the actor overlap actor1:" + actor1.type + " actor2: " + actor2.type); //uncomment for debugging only
   // Check if either actor is non-interactable or if they are the same actor
   if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
       return false;
@@ -89,6 +90,7 @@ class Actor {
     this.isDead = isDead;
     this.interactable = true;
     this.deadTime = deadTime || 0;
+    this.onConveyorBelt = undefined;
   }
 }
 
@@ -99,7 +101,6 @@ class Player extends Actor {
     this.coinsCollected = 0;
     this.isPowered = isPowered;
 
-  
   }
 
   get type() {
@@ -115,20 +116,26 @@ Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
-  // Prevent horizontal movement if the player is dead
+
+  // Handle player input
   if (!this.isDead) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
   }
 
-  // Apply horizontal movement only if the player is not dead
+  // Apply conveyor belt speed if on a conveyor belt
+  if (this.onConveyorBelt !== undefined) {
+    xSpeed += this.onConveyorBelt;
+    //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
+  }
+
+  // Apply horizontal movement
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (newPos.x !== this.pos.x) {
     this.pos = newPos; // Update position if horizontal movement occurred
   }
 
   let ySpeed = this.speed.y + time * gameSettings.gravity;
-
   // Check for jump input and apply jump force if on the ground
   if (!this.isDead && keys.isPressed("ArrowUp") && this.isOnGround(state)) {
     ySpeed = -gameSettings.jumpSpeed;
@@ -142,19 +149,20 @@ Player.prototype.update = function(time, state, keys) {
   } else {
     this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
   }
-  
+
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isDead = true;
+    this.isPowered = false;
+    poweredUp = false;
     playerLives -= 1;
     totalDeaths += 1;
-    // When player is marked as dead, make them drop to the ground
-    this.speed.y = gameSettings.gravity; // Set a positive ySpeed to simulate falling
+    this.speed.y = gameSettings.gravity; // Simulate falling when dead
   }
-
-
+    
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered);
 };
+
 
 Player.prototype.isOnGround = function(state) {
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
@@ -235,6 +243,33 @@ class PowerUp {
   };
 }
 
+class ConveyorBelt extends Actor {
+  constructor(pos, speed) {
+    super(pos, speed);
+  }
+
+  get type() {
+    return "conveyorBelt";
+  }
+
+  static create(pos, ch) {
+    if (ch == "<") {
+      return new ConveyorBelt(pos, new Vec(-5, 0)); // Moving left
+    } else if (ch == ">") {
+      return new ConveyorBelt(pos, new Vec(5, 0)); // Moving right
+    }
+  }
+}
+
+ConveyorBelt.prototype.size = new Vec(1, 0.5);
+
+ConveyorBelt.prototype.update = function(time) {
+  // Conveyor belts might not need to update themselves since they are stationary
+  return this;
+};
+
+
+
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
   if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {  //lava can pass through bridges
@@ -288,6 +323,7 @@ Hoopa.prototype.update = function(time, state) {
   let xSpeed = this.speed.x;
   let pos = this.pos;
 
+ 
   // Use moveActor for horizontal movement, reversing direction on collision
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (pos.x === newPos.x) {
@@ -353,6 +389,7 @@ KeggaTroopa.prototype.update = function(time, state) {
   let xSpeed = this.speed.x;
   let pos = this.pos;
 
+
   // Use moveActor for horizontal movement, reversing direction on collision
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (pos.x === newPos.x) {
@@ -409,6 +446,7 @@ state.actors.forEach(actor => {
 
 
 var levelChars = {
+  // Add new level characters here
   ".": "empty",
   "%": "stone",
   "#": "wall",
@@ -420,6 +458,8 @@ var levelChars = {
   "v": Lava,
   "m": Hoopa,
   "n": KeggaTroopa,
+  "<": ConveyorBelt,
+  ">": ConveyorBelt,
   "E": "exit", // The exit is represented by E in the level plan
   "B": "bridge", // Bridge section should affect collision. Player walks on top of it.
   "T": "pipeTopLeft",
@@ -481,7 +521,7 @@ class Level {
         if (type === "wall" && (here === "wall" || here === "stone" ||
           here === "pipeTopLeft" || here === "pipeTopRight" || here === "pipeBodyLeft" || here === "pipeBodyRight" || 
           here === "pipeUpperCornerLeft" || here === "pipeLowerCornerLeft" || here === "pipeTopHorizontalUpper" || here === "pipeTopHorizontalLower" ||
-          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower")) return true;
+          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower" )) return true;
         if (here == type) return true;
       }
     }
@@ -506,14 +546,14 @@ function overlap(actor1, actor2) {
     if (!actor1.interactable || !actor2.interactable) {
       return false;
     }
-    if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
+    /*if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
     (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
   console.debug("kegga is sliding and overlaps with hoppa");
 } 
 if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
   actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
   console.debug("kegga is sliding and overlaps with another kegga");
-  }
+  }*/
  
 
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
@@ -521,6 +561,30 @@ if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaT
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
          actor1.pos.y < actor2.pos.y + actor2.size.y;
 }
+
+ConveyorBelt.prototype.collide = function(state) {
+ let updatedActors = state.actors.map(actor => {
+  // Skip if we're checking the conveyor belt against itself or the actor is not one of the specified types
+  if (actor === this || !(actor instanceof Hoopa || actor instanceof KeggaTroopa || actor instanceof Player)) {
+    return actor; // Return the actor unmodified
+  }
+
+  // Check if the actor overlaps with the conveyor belt
+  if (actorOverlap(this, actor)) {
+    console.log(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
+    // Create a new instance of the actor with the updated onConveyorBelt property
+    console.log(actor.speed.x);
+    let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { onConveyorBelt: this.speed.x });
+    return updatedActor; // Return the modified actor
+  }
+
+  return actor; // Return the actor unmodified if no overlap
+});
+
+// Return a new state with the updated actors
+return new State(state.level, updatedActors, state.status, state.score);
+};
+  
 
 Lava.prototype.collide = function(state) {
   let player = state.player;
@@ -628,7 +692,6 @@ KeggaTroopa.prototype.collide = function(state) {
         player.isDead = true;
         totalDeaths += 1;
         playerLives -= 1;
-        //player.interactable = false; // Make the player non-interactable
         console.debug("Player is dead, remaining lives: " + playerLives);
       }
 
@@ -682,6 +745,14 @@ class State {
 
     if (newState.level.touches(player.pos, player.size, "lava")) {
       return new State(newState.level, actors, "lost", newState.score, newState.exitReached);
+    }
+    
+    for (let actor of actors) {
+      //add update of stae for covneyor and actors
+      if (actor instanceof ConveyorBelt) {
+        newState = actor.collide(newState);
+      }
+
     }
 
     for (let actor of actors) {
@@ -1211,10 +1282,29 @@ drawActors(actors) {
       let tileX = 27.2 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
       this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, width, height);
-    }
+    }else if (actor.type == "conveyorBelt") {
+      let frame = Math.floor(Date.now() / 100) % 3; // Change frame every 100ms, cycle through 3 frames
+      let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
+      let sy = 0; // Assuming all frames are on the same row in the sprite sheet
+      let sWidth = 20; // Source width (sprite width)
+      let sHeight = 20; // Source height (sprite height)
+      let dx = x; // Destination x-coordinate on the canvas
+      let dy = y; // Destination y-coordinate on the canvas
+      let dWidth = width; // Destination width
+      let dHeight = height + 10; // Destination height
+    
+      this.cx.save(); // Save the current state
+      if (actor.speed.x > 0) { // If the conveyor belt is moving left
+        this.cx.translate(dx + dWidth / 2, dy + dHeight / 2); // Translate to the center of the conveyor belt
+        this.cx.scale(-1, 1); // Flip horizontally
+        this.cx.translate(-(dx + dWidth / 2), -(dy + dHeight / 2)); // Translate back
+      }
+    
+      this.cx.drawImage(conveyorBeltSprites, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+      this.cx.restore(); // Restore the state
+    }    
   }
 }
-
 
   flipHorizontally(around) {
     this.cx.translate(around, 0);
