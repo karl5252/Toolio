@@ -672,8 +672,8 @@ PowerUp.prototype.collide = function(state) {
   let player = state.player;
   let newState = updatePoints(state, this.pointValue);
 
-  if(player.isPowered){
-    return;
+  if(player.isPowered || poweredUp){
+    return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score, isPowered);
   } else {
     player.isPowered = true;
     poweredUp = true;
@@ -1535,4 +1535,16 @@ let pressed = Object.create(null); // New object to track freshly pressed keys
 
   return down;
 }
+
+let inputSequence ='';
+document.addEventListener("keydown", (event) => {
+  const key = event.key.toLowerCase();
+  inputSequence += key;
+  if (inputSequence.includes('tickettorejetto')) {
+    console.debug('Toolchain code entered!');
+    inputSequence = '';
+    playerLives += 30; // Award 30 lives
+    totalScore += 3000; // Award 3000 points
+  }
+});
 
