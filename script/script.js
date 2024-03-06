@@ -1,3 +1,4 @@
+// --- Settings & Configurations ---
 const gameSettings = {
   playerXSpeed: 7,
   gravity: 30,
@@ -12,10 +13,10 @@ let introShown = false;
 let poweredUp = false;
 let totalDeaths = 0;
 let totalScore = 0;
-let scorePerLevel = 0; // Reset this at the start of each level
-let levelCounter = 1; // Start from level 1
-let playerLives = 3; // Start with 3 lives
-let coinsCollected = 0; // Retain this across game
+let scorePerLevel = 0;
+let levelCounter = 1; 
+let playerLives = 3; 
+let coinsCollected = 0; 
 
 
 
@@ -25,20 +26,18 @@ function createSprite(src) {
   return sprite;
 }
 
-var otherSprites = createSprite("img/sprites.png");
-var playerSprites = createSprite("img/player.png");
-var conveyorBeltSprites = createSprite("img/conveyor.png");
-var poweredUpPlayerSprites = createSprite("img/playerPoweredUp.png");
-var hoopaSprites = createSprite("img/hoopa.png");
-var keggaSprites = createSprite("img/kegga.png");
+let sprites = {
+  other: createSprite("img/sprites.png"),
+  player: createSprite("img/player.png"),
+  conveyorBelt: createSprite("img/conveyor.png"),
+  poweredUpPlayer: createSprite("img/playerPoweredUp.png"),
+  hoopa: createSprite("img/hoopa.png"),
+  kegga: createSprite("img/kegga.png")
+};
 
+// --- Utility Functions ---
 function actorOverlap(actor1, actor2) {
-  //console.debug("checking the actor overlap actor1:" + actor1.type + " actor2: " + actor2.type); //uncomment for debugging only
-  // Check if either actor is non-interactable or if they are the same actor
-  if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
-      return false;
-  }
-
+  if (!actor1.interactable || !actor2.interactable || actor1 === actor2) return false;
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
@@ -46,29 +45,19 @@ function actorOverlap(actor1, actor2) {
 }
 
 function updatePoints(state, pointsToAdd) {
-  totalScore += pointsToAdd; // Add points directly to totalScore
-  console.debug(`Points updated. Total score: ${totalScore}`);
-  // Return a new state with the updated score
+  totalScore += pointsToAdd; 
   return new State(state.level, state.actors, state.status,  totalScore);
 }
 
-
 function updateTotalScore() {
-  totalScore += scorePerLevel; // Add the score for the current level to the total score
-  console.debug(`Total Score Updated: ${totalScore}`);
-  scorePerLevel = 0; // Reset score for the next level
+  totalScore += scorePerLevel;
+  scorePerLevel = 0; 
 }
 
-
-var arrowKeys = trackKeys([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  " " //shooting with space will alter this later
-]);
+var arrowKeys = trackKeys([  "ArrowLeft",  "ArrowRight",  "ArrowUp",]);
 
 
-
+// --- Game Classes ---
 class Vec {
   constructor(x, y) {
     this.x = x;
@@ -83,22 +72,31 @@ class Vec {
     return new Vec(this.x * factor, this.y * factor);
   }
 }
+/**
+ * Represents a game actor.
+ * @class
+ * @param {Vec} pos The position of the actor.
+ * @param {Vec} speed The speed of the actor.
+ * @param {Boolean} isDead Whether the actor is dead.
+ * @param {Number} deadTime The time since the actor died.
+ * @returns {Actor} A new actor object.
+ * @throws {TypeError} Cannot construct Actor instances directly. I am trying to simulate here the abstract class in JS
+ */
 class Actor {
   constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
     this.speed = speed;
     this.isDead = isDead;
     this.interactable = true;
-    this.deadTime = deadTime || 0;
+    this.deadTime = deadTime;
     this.onConveyorBelt = undefined;
-  }
+}
 }
 
 class Player extends Actor {
   constructor(pos, speed, isDead = false, isPowered = poweredUp, deathPhase = 0) {
     super(pos, speed, isDead);
-    this.score = 0;
-    this.coinsCollected = 0;
+
     this.isPowered = isPowered;
     this.deathPhase = deathPhase;
 
@@ -113,6 +111,7 @@ class Player extends Actor {
   }
 }
 
+// Player specific functions
 Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
@@ -169,9 +168,6 @@ Player.prototype.update = function(time, state, keys) {
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
 
 };
-
-
-
 
 Player.prototype.isOnGround = function(state) {
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
@@ -476,7 +472,7 @@ state.actors.forEach(actor => {
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
 
-
+// --- Level & State Management ---
 var levelChars = {
   // Add new level characters here
   ".": "empty",
@@ -492,6 +488,7 @@ var levelChars = {
   "n": KeggaTroopa,
   "<": ConveyorBelt,
   ">": ConveyorBelt,
+  // Level elements
   "E": "exit", // The exit is represented by E in the level plan
   "B": "bridge", // Bridge section should affect collision. Player walks on top of it.
   "T": "pipeTopLeft",
@@ -735,21 +732,28 @@ KeggaTroopa.prototype.collide = function(state) {
   return state;
 };
 
-
+/**
+ * Represents the current state of the game.
+ * constructor
+ * @param {Level} level The current level.
+ * @param {Array} actors An array of actors in the game.
+ * @param {String} status The current status of the game.
+ * @param {Number} score The current score of the game.
+ * @param {Boolean} exitReached Whether the exit has been reached.
+ * @returns {State} A new state object representing the current state of the game.
+ */
 class State {
-  constructor(level, actors, status, score = 0, exitReached = false, isPowered) {
+  constructor(level, actors, status, score = 0, exitReached = false) {
     this.level = level;
     this.actors = actors;
     this.status = status;
-    //this.coinsCollected = coinsCollected;
     this.score = score;
     this.exitReached = exitReached; // Now part of the state
-    this.isPowered = isPowered;
 }
 
 
   static start(level) {
-    return new State(level, level.startActors, "playing",  this.score, this.isPowered);
+    return new State(level, level.startActors, "playing");
   }
 
   get player() {
@@ -804,7 +808,18 @@ class State {
   }
 }
 
-
+/**
+ * Creates an HTML element and optionally sets its attributes and appends child elements.
+ * 
+ * @param {string} name The tag name of the element to create (e.g., 'div', 'span').
+ * @param {Object} attrs An object containing attribute key-value pairs to set on the element.
+ *                        Each key is the name of an attribute, and its value is the attribute's value.
+ *                        For example, `{ id: 'header', class: 'main' }` would set the element's `id` to 'header' and its `class` to 'main'.
+ * @param {...Node} children Zero or more child nodes (elements or text nodes) to append to the created element.
+ *                           These can be elements created by `document.createElement()`, text nodes created by `document.createTextNode()`,
+ *                           or other elements returned by functions like `elt()`.
+ * @returns {HTMLElement} The created HTML element with the specified attributes and children appended.
+ */
 function elt(name, attrs, ...children) {
   let dom = document.createElement(name);
   for (let attr of Object.keys(attrs)) {
@@ -816,6 +831,7 @@ function elt(name, attrs, ...children) {
   return dom;
 }
 
+// --- Rendering & Display ---
 var CanvasDisplay = class CanvasDisplay {
   constructor(parent) {
     // Find or create the canvas element
@@ -1002,6 +1018,11 @@ drawScreen(options) {
     );
   }
 
+  
+  /**
+   * Draws the background of the level on the canvas.
+   * @param {Level} level The level object, which includes the level's rows.
+   **/
   drawBackground(level) {
     // Ensure the viewport is initialized
     let padding = 1; // 1 pixel of padding on the right side of each sprite
@@ -1104,15 +1125,11 @@ drawScreen(options) {
             let tileX = tileIndex * (gameSettings.scale + padding);
 
             // Draw the tile
-            this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
+            this.cx.drawImage(sprites.other, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
               }
             }
     }
-    
 
-
-
-  
 /**
  * Draws the player on the canvas.
  *
@@ -1136,7 +1153,7 @@ drawPlayer(player, x, y, width, height) {
     }
 
     let tileX = tile * width;
-    let spriteSheet = player.isPowered ? poweredUpPlayerSprites : playerSprites;
+    let spriteSheet = player.isPowered ? sprites.poweredUpPlayer : sprites.player;
     this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
     this.cx.restore();
     return; // Return early to skip other sprite logic
@@ -1160,11 +1177,10 @@ drawPlayer(player, x, y, width, height) {
   }
 
   let tileX = tile * width;
-  let spriteSheet = player.isPowered ? poweredUpPlayerSprites : playerSprites;
+  let spriteSheet = player.isPowered ? sprites.poweredUpPlayer : sprites.player;
   this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
   this.cx.restore();
 }
-
 
 /**
  * Draws the Hoopa on the canvas.
@@ -1213,7 +1229,7 @@ drawHoopa(hoopa, x, y, width, height) {
 
   // Draw the chosen tile at the calculated position.
   this.cx.drawImage(
-    hoopaSprites,
+    sprites.hoopa,
     tileX,
     0,
     width,
@@ -1227,7 +1243,14 @@ drawHoopa(hoopa, x, y, width, height) {
   // Restore the saved drawing state.
   this.cx.restore();
 }
-
+/**
+ * 
+ * @param {Actor} keggaTroopa 
+ * @param {*} x 
+ * @param {*} y 
+ * @param {*} width 
+ * @param {*} height 
+ */
 drawKegga(keggaTroopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
   width += gameSettings.actorXOverlap * 2;
@@ -1267,7 +1290,7 @@ drawKegga(keggaTroopa, x, y, width, height) {
 
   // Draw the chosen tile at the calculated position.
   this.cx.drawImage(
-    keggaSprites,
+    sprites.kegga,
     tileX,
     0,
     width,
@@ -1282,6 +1305,9 @@ drawKegga(keggaTroopa, x, y, width, height) {
   this.cx.restore();
 }
 
+/**
+ * Draws the actors on the canvas.
+ */
 drawActors(actors) {
   for (let actor of actors) {
     let width = actor.size.x * gameSettings.scale;
@@ -1300,15 +1326,15 @@ drawActors(actors) {
       this.drawKegga(actor, x, y, width, height);
     } else if (actor.type == "lava") {
       let tileX = 1 * gameSettings.scale; // Lava sprite position on the spritesheet
-      this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, spriteWidth, height);
+      this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, spriteWidth, height);
     } else if (actor.type == "coin") {
       spriteWidth = width * 0.75; // Adjust sprite width for coins
       let tileX = 2 * gameSettings.scale; // Coin sprite position on the spritesheet
-      this.cx.drawImage(otherSprites, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
+      this.cx.drawImage(sprites.other, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
     } else if (actor.type == "powerUp") {
       let tileX = 27.2 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
-      this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, width, height);
+      this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, width, height);
     }else if (actor.type == "conveyorBelt") {
       let frame = Math.floor(Date.now() / 100) % 3; // Change frame every 100ms, cycle through 3 frames
       let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
@@ -1327,7 +1353,7 @@ drawActors(actors) {
         this.cx.translate(-(dx + dWidth / 2), -(dy + dHeight / 2)); // Translate back
       }
     
-      this.cx.drawImage(conveyorBeltSprites, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+      this.cx.drawImage(sprites.conveyorBelt, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
       this.cx.restore(); // Restore the state
     }    
   }
@@ -1340,7 +1366,7 @@ drawActors(actors) {
   }
 };
 
-
+// --- Game Control & Animation ---
 function runAnimation(frameFunc) {
   let lastTime = null;
   function frame(time) {
@@ -1384,7 +1410,7 @@ function runLevel(level, Display) {
   });
 }
 
-
+// --- Start the Game ---
 async function runGame(plans, Display) {
   // Display the intro screen first
   let display = new CanvasDisplay(document.body);
@@ -1454,11 +1480,11 @@ function runLevel(level, Display) {
   });
 }
 
-
+// Utility functions...
 
 function trackKeys(keys) {
   let down = Object.create(null);
-  let pressed = Object.create(null); // New object to track freshly pressed keys
+let pressed = Object.create(null); // New object to track freshly pressed keys
 
   function track(event) {
     if (keys.includes(event.key)) {
