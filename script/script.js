@@ -1,3 +1,4 @@
+// --- Settings & Configurations ---
 const gameSettings = {
   playerXSpeed: 7,
   gravity: 30,
@@ -12,10 +13,10 @@ let introShown = false;
 let poweredUp = false;
 let totalDeaths = 0;
 let totalScore = 0;
-let scorePerLevel = 0; // Reset this at the start of each level
-let levelCounter = 1; // Start from level 1
-let playerLives = 3; // Start with 3 lives
-let coinsCollected = 0; // Retain this across game
+let scorePerLevel = 0;
+let levelCounter = 1; 
+let playerLives = 3; 
+let coinsCollected = 0; 
 
 
 
@@ -25,20 +26,18 @@ function createSprite(src) {
   return sprite;
 }
 
-var otherSprites = createSprite("img/sprites.png");
-var playerSprites = createSprite("img/player.png");
-var conveyorBeltSprites = createSprite("img/conveyor.png");
-var poweredUpPlayerSprites = createSprite("img/playerPoweredUp.png");
-var hoopaSprites = createSprite("img/hoopa.png");
-var keggaSprites = createSprite("img/kegga.png");
+let sprites = {
+  other: createSprite("img/sprites.png"),
+  player: createSprite("img/player.png"),
+  conveyorBelt: createSprite("img/conveyor.png"),
+  poweredUpPlayer: createSprite("img/playerPoweredUp.png"),
+  hoopa: createSprite("img/hoopa.png"),
+  kegga: createSprite("img/kegga.png")
+};
 
+// --- Utility Functions ---
 function actorOverlap(actor1, actor2) {
-  //console.log("checking the actor overlap actor1:" + actor1.type + " actor2: " + actor2.type); //uncomment for debugging only
-  // Check if either actor is non-interactable or if they are the same actor
-  if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
-      return false;
-  }
-
+  if (!actor1.interactable || !actor2.interactable || actor1 === actor2) return false;
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
@@ -46,29 +45,19 @@ function actorOverlap(actor1, actor2) {
 }
 
 function updatePoints(state, pointsToAdd) {
-  totalScore += pointsToAdd; // Add points directly to totalScore
-  console.debug(`Points updated. Total score: ${totalScore}`);
-  // Return a new state with the updated score
+  totalScore += pointsToAdd; 
   return new State(state.level, state.actors, state.status,  totalScore);
 }
 
-
 function updateTotalScore() {
-  totalScore += scorePerLevel; // Add the score for the current level to the total score
-  console.debug(`Total Score Updated: ${totalScore}`);
-  scorePerLevel = 0; // Reset score for the next level
+  totalScore += scorePerLevel;
+  scorePerLevel = 0; 
 }
 
-
-var arrowKeys = trackKeys([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  " " //shooting with space will alter this later
-]);
+var arrowKeys = trackKeys([  "ArrowLeft",  "ArrowRight",  "ArrowUp",]);
 
 
-
+// --- Game Classes ---
 class Vec {
   constructor(x, y) {
     this.x = x;
@@ -83,23 +72,54 @@ class Vec {
     return new Vec(this.x * factor, this.y * factor);
   }
 }
+/**
+ * Represents a game actor.
+ * @class
+ * @param {Vec} pos The position of the actor.
+ * @param {Vec} speed The speed of the actor.
+ * @param {Boolean} isDead Whether the actor is dead.
+ * @param {Number} deadTime The time since the actor died.
+ * @returns {Actor} A new actor object.
+ * @throws {TypeError} Cannot construct Actor instances directly. I am trying to simulate here the abstract class in JS
+ */
 class Actor {
   constructor(pos, speed, isDead = false, deadTime = 0) {
     this.pos = pos;
     this.speed = speed;
     this.isDead = isDead;
     this.interactable = true;
-    this.deadTime = deadTime || 0;
+    this.deadTime = deadTime;
     this.onConveyorBelt = undefined;
+    if (new.target === Actor) {
+      throw new TypeError("Cannot construct Actor instances directly");
+    }
+
+    // Check if subclass has implemented the method
+    if (this.update === Actor.prototype.update) {
+      throw new TypeError("Must override update method");
+    }
+
+    if (this.collide === Actor.prototype.collide) {
+      throw new TypeError("Must override collide method");
+    }
+  }
+
+  update() {
+    throw new Error("Update method must be implemented by subclass");
+  }
+
+  collide() {
+    throw new Error("Collide method must be implemented by subclass");
   }
 }
 
+
 class Player extends Actor {
-  constructor(pos, speed, isDead = false, isPowered = poweredUp) {
+  constructor(pos, speed, isDead = false, isPowered = poweredUp, deathPhase = 0) {
     super(pos, speed, isDead);
-    this.score = 0;
-    this.coinsCollected = 0;
+
     this.isPowered = isPowered;
+    this.deathPhase = deathPhase;
 
   }
 
@@ -112,62 +132,91 @@ class Player extends Actor {
   }
 }
 
+// Player specific functions
 Player.prototype.size = new Vec(0.8, 1.5);
 
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
-
-  // Handle player input
   if (!this.isDead) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
+  } else {
+    this.interactable = false; // Make the player non-interactable during death animation
+    this.handleDeathAnimation(time);
   }
 
   // Apply conveyor belt speed if on a conveyor belt
   if (this.onConveyorBelt !== undefined) {
     xSpeed += this.onConveyorBelt;
-    //this.onConveyorBelt = undefined; // Reset the flag after applying the speed
   }
 
   // Apply horizontal movement
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (newPos.x !== this.pos.x) {
-    this.pos = newPos; // Update position if horizontal movement occurred
+    this.pos = newPos;  // Update position if horizontal movement occurred
   }
 
-  let ySpeed = this.speed.y + time * gameSettings.gravity;
-  // Check for jump input and apply jump force if on the ground
-  if (!this.isDead && keys.isPressed("ArrowUp") && this.isOnGround(state)) {
-    ySpeed = -gameSettings.jumpSpeed;
+  let ySpeed = this.speed.y;
+  if (!this.isDead) {
+    // Normal gravity and jump logic
+    ySpeed += time * gameSettings.gravity;
+    if (keys.isPressed("ArrowUp") && this.isOnGround(state)) {
+      ySpeed = -gameSettings.jumpSpeed;
+    }
+  } else {
+    // Apply increased gravity during death animation
+    ySpeed += time * gameSettings.gravity * 2;  // Increase gravity effect during death animation
   }
 
   // Apply vertical movement due to gravity or jump
   newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
   if (newPos.y !== this.pos.y) {
-    this.pos = newPos; // Update position if vertical movement occurred
-    this.speed.y = ySpeed; // Update vertical speed
+    this.pos = newPos;  // Update position if vertical movement occurred
+    this.speed.y = ySpeed;  // Update vertical speed
   } else {
-    this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
+    this.speed.y = 0;  // Reset vertical speed if the player is on the ground or hits a ceiling
   }
 
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
-    this.isDead = true;
     this.isPowered = false;
     poweredUp = false;
     playerLives -= 1;
-    totalDeaths += 1;
-    this.speed.y = gameSettings.gravity; // Simulate falling when dead
+    this.isDead = true;
+    this.deathPhase = 0;  // Initiate death animation
   }
-    
-  return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered);
-};
 
+  return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
+
+};
 
 Player.prototype.isOnGround = function(state) {
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");
+};
+
+Player.prototype.handleDeathAnimation = function(time) {
+  switch (this.deathPhase) {
+    case 0:
+      console.debug("Player is dead - starting jump");
+      this.speed.y = -gameSettings.jumpSpeed * 1.5; // Slight jump, reduced jump speed
+      this.deathPhase = 1;
+      break;
+    case 1:
+      // In this phase, we expect the player to start falling after the initial jump
+      // The transition from jumping to falling is handled by gravity in the update method
+      console.debug("Player in jump/fall transition");
+      if (this.pos.y > gameSettings.canvasHeight / gameSettings.scale) {
+        // If the player falls off the screen, move to the next phase
+        this.deathPhase = 2; 
+      }
+      break;
+    case 2:
+      // The player has fallen off the screen, handle game over or respawn logic here
+      console.debug("Player has fallen off the screen");
+      break;
+  }
 };
 
 class Lava {
@@ -444,7 +493,7 @@ state.actors.forEach(actor => {
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
 };
 
-
+// --- Level & State Management ---
 var levelChars = {
   // Add new level characters here
   ".": "empty",
@@ -460,6 +509,7 @@ var levelChars = {
   "n": KeggaTroopa,
   "<": ConveyorBelt,
   ">": ConveyorBelt,
+  // Level elements
   "E": "exit", // The exit is represented by E in the level plan
   "B": "bridge", // Bridge section should affect collision. Player walks on top of it.
   "T": "pipeTopLeft",
@@ -531,6 +581,11 @@ class Level {
   // New method for moving an actor and checking for collisions
   moveActor(actor, move, time) {
     let newPos = actor.pos.plus(move.times(time));
+
+    // If the actor is not interactable, allow movement without collision checks
+    if (!actor.interactable) {
+      return newPos;
+    }
     if (!this.touches(newPos, actor.size, "wall") &&
      !this.touches(newPos, actor.size, "stone") &&
      !this.touches(newPos, actor.size, "bridge")) {
@@ -545,22 +600,17 @@ function overlap(actor1, actor2) {
     // If either actor is dead, they don't overlap.
     if (!actor1.interactable || !actor2.interactable) {
       return false;
-    }
-    /*if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
-    (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
-  console.debug("kegga is sliding and overlaps with hoppa");
-} 
-if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
-  actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
-  console.debug("kegga is sliding and overlaps with another kegga");
-  }*/
- 
+    } 
 
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
          actor1.pos.y < actor2.pos.y + actor2.size.y;
 }
+
+Player.prototype.collide = function(state) {
+  return this;
+};
 
 ConveyorBelt.prototype.collide = function(state) {
  let updatedActors = state.actors.map(actor => {
@@ -571,9 +621,9 @@ ConveyorBelt.prototype.collide = function(state) {
 
   // Check if the actor overlaps with the conveyor belt
   if (actorOverlap(this, actor)) {
-    console.log(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
+    console.debug(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
     // Create a new instance of the actor with the updated onConveyorBelt property
-    console.log(actor.speed.x);
+    console.debug(actor.speed.x);
     let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { onConveyorBelt: this.speed.x });
     return updatedActor; // Return the modified actor
   }
@@ -589,11 +639,12 @@ return new State(state.level, updatedActors, state.status, state.score);
 Lava.prototype.collide = function(state) {
   let player = state.player;
   if (!player.isDead) { // Check if the player is not already dead
-    player.isDead = true;
-    player.isPowered = false;
     poweredUp = false;
     totalDeaths += 1;
     playerLives -= 1;
+    player.isDead = true;
+    player.isPowered = false;
+
     //player.interactable = false; // Make the player non-interactable
     console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
   }
@@ -617,7 +668,7 @@ Coin.prototype.collide = function(state) {
 };
 
 PowerUp.prototype.collide = function(state) {
-  console.log("powerup collided");
+  console.debug("powerup collided");
   let player = state.player;
   let newState = updatePoints(state, this.pointValue);
 
@@ -626,7 +677,7 @@ PowerUp.prototype.collide = function(state) {
   } else {
     player.isPowered = true;
     poweredUp = true;
-    console.log("player is powered");
+    console.debug("player is powered");
     return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score, isPowered = true);
   
   }
@@ -651,7 +702,7 @@ Hoopa.prototype.collide = function(state) {
       //player is not dead but depowered
       player.isPowered = false;
       poweredUp = false;
-      console.log("player is depowered now");
+      console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
     } 
@@ -660,7 +711,7 @@ Hoopa.prototype.collide = function(state) {
       player.isDead = true;
       totalDeaths += 1;
       playerLives -= 1;
-      console.log("Player is dead, remaining lives: " + playerLives);
+      console.debug("Player is dead, remaining lives: " + playerLives);
       return new State(state.level, state.actors.filter(a => a != this), "lost", state.score);
     }
   }
@@ -687,7 +738,7 @@ KeggaTroopa.prototype.collide = function(state) {
       //player is not dead but depowered
       player.isPowered = false;
       poweredUp = false;
-      console.log("player is depowered now");
+      console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
     } else if (!player.isDead) { // Check if the player is not already dead
@@ -706,21 +757,28 @@ KeggaTroopa.prototype.collide = function(state) {
   return state;
 };
 
-
+/**
+ * Represents the current state of the game.
+ * constructor
+ * @param {Level} level The current level.
+ * @param {Array} actors An array of actors in the game.
+ * @param {String} status The current status of the game.
+ * @param {Number} score The current score of the game.
+ * @param {Boolean} exitReached Whether the exit has been reached.
+ * @returns {State} A new state object representing the current state of the game.
+ */
 class State {
-  constructor(level, actors, status, score = 0, exitReached = false, isPowered) {
+  constructor(level, actors, status, score = 0, exitReached = false) {
     this.level = level;
     this.actors = actors;
     this.status = status;
-    //this.coinsCollected = coinsCollected;
     this.score = score;
     this.exitReached = exitReached; // Now part of the state
-    this.isPowered = isPowered;
 }
 
 
   static start(level) {
-    return new State(level, level.startActors, "playing",  this.score, this.isPowered);
+    return new State(level, level.startActors, "playing");
   }
 
   get player() {
@@ -739,6 +797,13 @@ class State {
     }
 
     let player = newState.player;
+
+    if (player.isDead) {
+      // Player is dead, skip further collision checks
+      newState.status = "lost";
+      return newState;
+    }
+
     if (!newState.exitReached && newState.level.touches(player.pos, player.size, "exit")) {
       newState = new State(newState.level, actors, "won", newState.score, true);
       // Assuming you might want to handle level transition or scoring here
@@ -759,25 +824,27 @@ class State {
 
     for (let actor of actors) {
       if (actor != player && overlap(actor, player)) {
-        newState = actor.collide(newState);
-      }
-    }
-
-    // Consider what should happen if keggas and hoopas overlap. Currently, this loop does nothing.
-    let keggasAndHoopas = actors.filter(actor => actor instanceof KeggaTroopa || actor instanceof Hoopa);
-    for (let i = 0; i < keggasAndHoopas.length; i++) {
-      for (let j = i + 1; j < keggasAndHoopas.length; j++) {
-        if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
-          // Handle overlap logic here
+        if (!player.isDead) { // Only process collisions if the player is alive
+           newState = actor.collide(newState);
         }
       }
     }
-
     return newState;
   }
 }
 
-
+/**
+ * Creates an HTML element and optionally sets its attributes and appends child elements.
+ * 
+ * @param {string} name The tag name of the element to create (e.g., 'div', 'span').
+ * @param {Object} attrs An object containing attribute key-value pairs to set on the element.
+ *                        Each key is the name of an attribute, and its value is the attribute's value.
+ *                        For example, `{ id: 'header', class: 'main' }` would set the element's `id` to 'header' and its `class` to 'main'.
+ * @param {...Node} children Zero or more child nodes (elements or text nodes) to append to the created element.
+ *                           These can be elements created by `document.createElement()`, text nodes created by `document.createTextNode()`,
+ *                           or other elements returned by functions like `elt()`.
+ * @returns {HTMLElement} The created HTML element with the specified attributes and children appended.
+ */
 function elt(name, attrs, ...children) {
   let dom = document.createElement(name);
   for (let attr of Object.keys(attrs)) {
@@ -789,6 +856,7 @@ function elt(name, attrs, ...children) {
   return dom;
 }
 
+// --- Rendering & Display ---
 var CanvasDisplay = class CanvasDisplay {
   constructor(parent) {
     // Find or create the canvas element
@@ -871,12 +939,7 @@ var CanvasDisplay = class CanvasDisplay {
     let livesTextPosition = quarterWidth * 1 + (quarterWidth - livesTextWidth) / 2;
     let scoreTextPosition = quarterWidth * 2 + (quarterWidth - scoreTextWidth) / 2;
     let coinsCollectedTextPosition = quarterWidth * 3 + (quarterWidth - coinsCollectedTextWidth) / 2;
-  
     
-    //let levelTextPosition = (this.cx.canvas.width / 3 - levelTextWidth) / 2;
-    //let scoreTextPosition = this.cx.canvas.width / 3 + (this.cx.canvas.width / 3 - scoreTextWidth) / 2;
-    //let coinsCollectedTextPosition = this.cx.canvas.width / 3 * 2 + (this.cx.canvas.width / 3 - coinsCollectedTextWidth) / 2;
-  
     this.cx.fillText(levelText, levelTextPosition, 30);
     this.cx.fillText(livesText, livesTextPosition, 30);
     this.cx.fillText(scoreText, scoreTextPosition, 30);
@@ -962,13 +1025,6 @@ drawScreen(options) {
       view.left = Math.min(center.x + margin - view.width, state.level.width - view.width);
     }
   
-    // Optional: Update viewport top position if vertical movement is needed
-    // const verticalMargin = view.height / 4;
-    // if (center.y < view.top + verticalMargin) {
-    //   view.top = Math.max(center.y - verticalMargin, 0);
-    // } else if (center.y > view.top + view.height - verticalMargin) {
-    //   view.top = Math.min(center.y + verticalMargin - view.height, state.level.height - view.height);
-    // }
   }
 
   clearDisplay(status) {
@@ -987,6 +1043,11 @@ drawScreen(options) {
     );
   }
 
+  
+  /**
+   * Draws the background of the level on the canvas.
+   * @param {Level} level The level object, which includes the level's rows.
+   **/
   drawBackground(level) {
     // Ensure the viewport is initialized
     let padding = 1; // 1 pixel of padding on the right side of each sprite
@@ -1089,15 +1150,11 @@ drawScreen(options) {
             let tileX = tileIndex * (gameSettings.scale + padding);
 
             // Draw the tile
-            this.cx.drawImage(otherSprites, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
+            this.cx.drawImage(sprites.other, tileX, 0, gameSettings.scale, gameSettings.scale, screenX, screenY, gameSettings.scale, gameSettings.scale);
               }
             }
     }
-    
 
-
-
-  
 /**
  * Draws the player on the canvas.
  *
@@ -1111,33 +1168,42 @@ drawPlayer(player, x, y, width, height) {
   width += gameSettings.actorXOverlap * 2;
   x -= gameSettings.actorXOverlap;
 
+  // When the player is dead, lock the sprite to the tenth frame
+  if (player.isDead) {
+    let tile = 10; // Set to the tenth frame for the death animation
+
+    this.cx.save();
+    if (this.flipPlayer) {
+      this.flipHorizontally(x + width / 2);
+    }
+
+    let tileX = tile * width;
+    let spriteSheet = player.isPowered ? sprites.poweredUpPlayer : sprites.player;
+    this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
+    this.cx.restore();
+    return; // Return early to skip other sprite logic
+  }
+
+  // Regular sprite logic for when the player is alive
   if (player.speed.x != 0) {
     this.flipPlayer = player.speed.x < 0;
   }
 
-  let tile = 8;
+  let tile = 8; // Default tile for idle
   if (player.speed.y != 0) {
-    tile = 9;
+    tile = 9; // Jumping or falling
   } else if (player.speed.x != 0) {
-    tile = Math.floor(Date.now() / 60) % 8;
-  } else if (player.isDead) {
-    tile = 10;
+    tile = Math.floor(Date.now() / 60) % 8; // Walking animation
   }
 
   this.cx.save();
-
   if (this.flipPlayer) {
     this.flipHorizontally(x + width / 2);
   }
 
   let tileX = tile * width;
-
-  // Choose the appropriate spritesheet based on the player's powered-up state.
-  let spriteSheet = player.isPowered ? poweredUpPlayerSprites : playerSprites;
-
-  // Draw the player sprite using the selected spritesheet.
+  let spriteSheet = player.isPowered ? sprites.poweredUpPlayer : sprites.player;
   this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
-
   this.cx.restore();
 }
 
@@ -1188,7 +1254,7 @@ drawHoopa(hoopa, x, y, width, height) {
 
   // Draw the chosen tile at the calculated position.
   this.cx.drawImage(
-    hoopaSprites,
+    sprites.hoopa,
     tileX,
     0,
     width,
@@ -1202,7 +1268,14 @@ drawHoopa(hoopa, x, y, width, height) {
   // Restore the saved drawing state.
   this.cx.restore();
 }
-
+/**
+ * 
+ * @param {Actor} keggaTroopa 
+ * @param {*} x 
+ * @param {*} y 
+ * @param {*} width 
+ * @param {*} height 
+ */
 drawKegga(keggaTroopa, x, y, width, height) {
   // Adjust the width and x-coordinate based on the monster's overlap.
   width += gameSettings.actorXOverlap * 2;
@@ -1242,7 +1315,7 @@ drawKegga(keggaTroopa, x, y, width, height) {
 
   // Draw the chosen tile at the calculated position.
   this.cx.drawImage(
-    keggaSprites,
+    sprites.kegga,
     tileX,
     0,
     width,
@@ -1257,6 +1330,9 @@ drawKegga(keggaTroopa, x, y, width, height) {
   this.cx.restore();
 }
 
+/**
+ * Draws the actors on the canvas.
+ */
 drawActors(actors) {
   for (let actor of actors) {
     let width = actor.size.x * gameSettings.scale;
@@ -1275,15 +1351,15 @@ drawActors(actors) {
       this.drawKegga(actor, x, y, width, height);
     } else if (actor.type == "lava") {
       let tileX = 1 * gameSettings.scale; // Lava sprite position on the spritesheet
-      this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, spriteWidth, height);
+      this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, spriteWidth, height);
     } else if (actor.type == "coin") {
       spriteWidth = width * 0.75; // Adjust sprite width for coins
       let tileX = 2 * gameSettings.scale; // Coin sprite position on the spritesheet
-      this.cx.drawImage(otherSprites, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
+      this.cx.drawImage(sprites.other, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
     } else if (actor.type == "powerUp") {
       let tileX = 27.2 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
-      this.cx.drawImage(otherSprites, tileX, 0, spriteWidth, height, x, y, width, height);
+      this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, width, height);
     }else if (actor.type == "conveyorBelt") {
       let frame = Math.floor(Date.now() / 100) % 3; // Change frame every 100ms, cycle through 3 frames
       let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
@@ -1302,7 +1378,7 @@ drawActors(actors) {
         this.cx.translate(-(dx + dWidth / 2), -(dy + dHeight / 2)); // Translate back
       }
     
-      this.cx.drawImage(conveyorBeltSprites, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+      this.cx.drawImage(sprites.conveyorBelt, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
       this.cx.restore(); // Restore the state
     }    
   }
@@ -1315,7 +1391,7 @@ drawActors(actors) {
   }
 };
 
-
+// --- Game Control & Animation ---
 function runAnimation(frameFunc) {
   let lastTime = null;
   function frame(time) {
@@ -1359,7 +1435,7 @@ function runLevel(level, Display) {
   });
 }
 
-
+// --- Start the Game ---
 async function runGame(plans, Display) {
   // Display the intro screen first
   let display = new CanvasDisplay(document.body);
@@ -1429,11 +1505,11 @@ function runLevel(level, Display) {
   });
 }
 
-
+// Utility functions...
 
 function trackKeys(keys) {
   let down = Object.create(null);
-  let pressed = Object.create(null); // New object to track freshly pressed keys
+let pressed = Object.create(null); // New object to track freshly pressed keys
 
   function track(event) {
     if (keys.includes(event.key)) {
