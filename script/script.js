@@ -33,7 +33,7 @@ var hoopaSprites = createSprite("img/hoopa.png");
 var keggaSprites = createSprite("img/kegga.png");
 
 function actorOverlap(actor1, actor2) {
-  //console.log("checking the actor overlap actor1:" + actor1.type + " actor2: " + actor2.type); //uncomment for debugging only
+  //console.debug("checking the actor overlap actor1:" + actor1.type + " actor2: " + actor2.type); //uncomment for debugging only
   // Check if either actor is non-interactable or if they are the same actor
   if (!actor1.interactable || !actor2.interactable || actor1 === actor2) {
       return false;
@@ -121,6 +121,7 @@ Player.prototype.update = function(time, state, keys) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
   } else {
+    this.interactable = false; // Make the player non-interactable during death animation
     this.handleDeathAnimation(time);
   }
 
@@ -160,6 +161,7 @@ Player.prototype.update = function(time, state, keys) {
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isPowered = false;
     poweredUp = false;
+    playerLives -= 1;
     this.isDead = true;
     this.deathPhase = 0;  // Initiate death animation
   }
@@ -180,14 +182,14 @@ Player.prototype.isOnGround = function(state) {
 Player.prototype.handleDeathAnimation = function(time) {
   switch (this.deathPhase) {
     case 0:
-      console.log("Player is dead - starting jump");
+      console.debug("Player is dead - starting jump");
       this.speed.y = -gameSettings.jumpSpeed * 1.5; // Slight jump, reduced jump speed
       this.deathPhase = 1;
       break;
     case 1:
       // In this phase, we expect the player to start falling after the initial jump
       // The transition from jumping to falling is handled by gravity in the update method
-      console.log("Player in jump/fall transition");
+      console.debug("Player in jump/fall transition");
       if (this.pos.y > gameSettings.canvasHeight / gameSettings.scale) {
         // If the player falls off the screen, move to the next phase
         this.deathPhase = 2; 
@@ -195,7 +197,7 @@ Player.prototype.handleDeathAnimation = function(time) {
       break;
     case 2:
       // The player has fallen off the screen, handle game over or respawn logic here
-      console.log("Player has fallen off the screen");
+      console.debug("Player has fallen off the screen");
       break;
   }
 };
@@ -561,6 +563,11 @@ class Level {
   // New method for moving an actor and checking for collisions
   moveActor(actor, move, time) {
     let newPos = actor.pos.plus(move.times(time));
+
+    // If the actor is not interactable, allow movement without collision checks
+    if (!actor.interactable) {
+      return newPos;
+    }
     if (!this.touches(newPos, actor.size, "wall") &&
      !this.touches(newPos, actor.size, "stone") &&
      !this.touches(newPos, actor.size, "bridge")) {
@@ -575,16 +582,7 @@ function overlap(actor1, actor2) {
     // If either actor is dead, they don't overlap.
     if (!actor1.interactable || !actor2.interactable) {
       return false;
-    }
-    /*if ((actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof Hoopa) || 
-    (actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof Hoopa)) {
-  console.debug("kegga is sliding and overlaps with hoppa");
-} 
-if(actor1 instanceof KeggaTroopa && actor1.isSliding && actor2 instanceof KeggaTroopa ||
-  actor2 instanceof KeggaTroopa && actor2.isSliding && actor1 instanceof KeggaTroopa) {
-  console.debug("kegga is sliding and overlaps with another kegga");
-  }*/
- 
+    } 
 
   return actor1.pos.x + actor1.size.x > actor2.pos.x &&
          actor1.pos.x < actor2.pos.x + actor2.size.x &&
@@ -619,11 +617,12 @@ return new State(state.level, updatedActors, state.status, state.score);
 Lava.prototype.collide = function(state) {
   let player = state.player;
   if (!player.isDead) { // Check if the player is not already dead
-    player.isDead = true;
-    player.isPowered = false;
     poweredUp = false;
     totalDeaths += 1;
     playerLives -= 1;
+    player.isDead = true;
+    player.isPowered = false;
+
     //player.interactable = false; // Make the player non-interactable
     console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
   }
@@ -796,20 +795,11 @@ class State {
 
     for (let actor of actors) {
       if (actor != player && overlap(actor, player)) {
-        newState = actor.collide(newState);
-      }
-    }
-
-    // Consider what should happen if keggas and hoopas overlap. Currently, this loop does nothing.
-    let keggasAndHoopas = actors.filter(actor => actor instanceof KeggaTroopa || actor instanceof Hoopa);
-    for (let i = 0; i < keggasAndHoopas.length; i++) {
-      for (let j = i + 1; j < keggasAndHoopas.length; j++) {
-        if (overlap(keggasAndHoopas[i], keggasAndHoopas[j])) {
-          // Handle overlap logic here
+        if (!player.isDead) { // Only process collisions if the player is alive
+           newState = actor.collide(newState);
         }
       }
     }
-
     return newState;
   }
 }
@@ -908,12 +898,7 @@ var CanvasDisplay = class CanvasDisplay {
     let livesTextPosition = quarterWidth * 1 + (quarterWidth - livesTextWidth) / 2;
     let scoreTextPosition = quarterWidth * 2 + (quarterWidth - scoreTextWidth) / 2;
     let coinsCollectedTextPosition = quarterWidth * 3 + (quarterWidth - coinsCollectedTextWidth) / 2;
-  
     
-    //let levelTextPosition = (this.cx.canvas.width / 3 - levelTextWidth) / 2;
-    //let scoreTextPosition = this.cx.canvas.width / 3 + (this.cx.canvas.width / 3 - scoreTextWidth) / 2;
-    //let coinsCollectedTextPosition = this.cx.canvas.width / 3 * 2 + (this.cx.canvas.width / 3 - coinsCollectedTextWidth) / 2;
-  
     this.cx.fillText(levelText, levelTextPosition, 30);
     this.cx.fillText(livesText, livesTextPosition, 30);
     this.cx.fillText(scoreText, scoreTextPosition, 30);
@@ -999,13 +984,6 @@ drawScreen(options) {
       view.left = Math.min(center.x + margin - view.width, state.level.width - view.width);
     }
   
-    // Optional: Update viewport top position if vertical movement is needed
-    // const verticalMargin = view.height / 4;
-    // if (center.y < view.top + verticalMargin) {
-    //   view.top = Math.max(center.y - verticalMargin, 0);
-    // } else if (center.y > view.top + view.height - verticalMargin) {
-    //   view.top = Math.min(center.y + verticalMargin - view.height, state.level.height - view.height);
-    // }
   }
 
   clearDisplay(status) {
@@ -1148,35 +1126,45 @@ drawPlayer(player, x, y, width, height) {
   width += gameSettings.actorXOverlap * 2;
   x -= gameSettings.actorXOverlap;
 
+  // When the player is dead, lock the sprite to the tenth frame
+  if (player.isDead) {
+    let tile = 10; // Set to the tenth frame for the death animation
+
+    this.cx.save();
+    if (this.flipPlayer) {
+      this.flipHorizontally(x + width / 2);
+    }
+
+    let tileX = tile * width;
+    let spriteSheet = player.isPowered ? poweredUpPlayerSprites : playerSprites;
+    this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
+    this.cx.restore();
+    return; // Return early to skip other sprite logic
+  }
+
+  // Regular sprite logic for when the player is alive
   if (player.speed.x != 0) {
     this.flipPlayer = player.speed.x < 0;
   }
 
-  let tile = 8;
+  let tile = 8; // Default tile for idle
   if (player.speed.y != 0) {
-    tile = 9;
+    tile = 9; // Jumping or falling
   } else if (player.speed.x != 0) {
-    tile = Math.floor(Date.now() / 60) % 8;
-  } else if (player.isDead) {
-    tile = 10;
+    tile = Math.floor(Date.now() / 60) % 8; // Walking animation
   }
 
   this.cx.save();
-
   if (this.flipPlayer) {
     this.flipHorizontally(x + width / 2);
   }
 
   let tileX = tile * width;
-
-  // Choose the appropriate spritesheet based on the player's powered-up state.
   let spriteSheet = player.isPowered ? poweredUpPlayerSprites : playerSprites;
-
-  // Draw the player sprite using the selected spritesheet.
   this.cx.drawImage(spriteSheet, tileX, 0, width, height, x, y, width, height);
-
   this.cx.restore();
 }
+
 
 /**
  * Draws the Hoopa on the canvas.
