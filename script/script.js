@@ -121,7 +121,6 @@ Player.prototype.update = function(time, state, keys) {
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
   } else {
-    // Handle death animation
     this.handleDeathAnimation(time);
   }
 
@@ -133,7 +132,7 @@ Player.prototype.update = function(time, state, keys) {
   // Apply horizontal movement
   let newPos = state.level.moveActor(this, new Vec(xSpeed, 0), time);
   if (newPos.x !== this.pos.x) {
-    this.pos = newPos; // Update position if horizontal movement occurred
+    this.pos = newPos;  // Update position if horizontal movement occurred
   }
 
   let ySpeed = this.speed.y;
@@ -143,29 +142,30 @@ Player.prototype.update = function(time, state, keys) {
     if (keys.isPressed("ArrowUp") && this.isOnGround(state)) {
       ySpeed = -gameSettings.jumpSpeed;
     }
+  } else {
+    // Apply increased gravity during death animation
+    ySpeed += time * gameSettings.gravity * 2;  // Increase gravity effect during death animation
   }
-  // No need for an 'else' clause here as the death animation logic is already applied above
 
   // Apply vertical movement due to gravity or jump
   newPos = state.level.moveActor(this, new Vec(0, ySpeed), time);
   if (newPos.y !== this.pos.y) {
-    this.pos = newPos; // Update position if vertical movement occurred
-    this.speed.y = ySpeed; // Update vertical speed
+    this.pos = newPos;  // Update position if vertical movement occurred
+    this.speed.y = ySpeed;  // Update vertical speed
   } else {
-    this.speed.y = 0; // Reset vertical speed if the player is on the ground or hits a ceiling
+    this.speed.y = 0;  // Reset vertical speed if the player is on the ground or hits a ceiling
   }
 
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
-    this.isDead = true;
     this.isPowered = false;
     poweredUp = false;
-    playerLives -= 1;
-    totalDeaths += 1;
-    this.deathPhase = 0; // Ensure the death animation starts from the beginning
+    this.isDead = true;
+    this.deathPhase = 0;  // Initiate death animation
   }
 
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
+
 };
 
 
@@ -178,39 +178,27 @@ Player.prototype.isOnGround = function(state) {
 };
 
 Player.prototype.handleDeathAnimation = function(time) {
-    switch (this.deathPhase) {
-      case 0:
-        console.log("Player is dead");
-        console.log("Before update: ", this.pos.y);
-
-        console.log("Player jumps up...");
-        //this.pos.y += this.speed.y * time;
-
-        this.speed.y = -gameSettings.jumpSpeed * 2; // 2 tiles high jump
-        console.log("Player y speed " + this.speed.y + " time " + time);
-        this.deathPhase = 1;
-        console.log("After update: ", this.pos.y);
-
-        break;
-      case 1:
-        // Falling phase after the jump
-        console.log("Player falls down...");
-        console.log("Before update: ", this.pos.y);
-
-        if (this.speed.y >= 0) { // Check if the player is coming down
-          this.speed.y += gameSettings.gravity * time * 5; // Accelerate downwards
-          if (this.pos.y > gameSettings.canvasHeight / gameSettings.scale) { // If the player falls off the screen
-            //this.deathPhase = 2; // End of animation
-            console.log("After update: ", this.pos.y);
-
-          }
-        }
-        break;
-      case 2:
-        // The player has fallen off the screen, handle game over or respawn logic here
-        break;
-    }
+  switch (this.deathPhase) {
+    case 0:
+      console.log("Player is dead - starting jump");
+      this.speed.y = -gameSettings.jumpSpeed * 1.5; // Slight jump, reduced jump speed
+      this.deathPhase = 1;
+      break;
+    case 1:
+      // In this phase, we expect the player to start falling after the initial jump
+      // The transition from jumping to falling is handled by gravity in the update method
+      console.log("Player in jump/fall transition");
+      if (this.pos.y > gameSettings.canvasHeight / gameSettings.scale) {
+        // If the player falls off the screen, move to the next phase
+        this.deathPhase = 2; 
+      }
+      break;
+    case 2:
+      // The player has fallen off the screen, handle game over or respawn logic here
+      console.log("Player has fallen off the screen");
+      break;
   }
+};
 
 class Lava {
   constructor(pos, speed, reset) {
@@ -781,6 +769,13 @@ class State {
     }
 
     let player = newState.player;
+
+    if (player.isDead) {
+      // Player is dead, skip further collision checks
+      newState.status = "lost";
+      return newState;
+    }
+
     if (!newState.exitReached && newState.level.touches(player.pos, player.size, "exit")) {
       newState = new State(newState.level, actors, "won", newState.score, true);
       // Assuming you might want to handle level transition or scoring here
