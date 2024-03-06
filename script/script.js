@@ -90,8 +90,29 @@ class Actor {
     this.interactable = true;
     this.deadTime = deadTime;
     this.onConveyorBelt = undefined;
+    if (new.target === Actor) {
+      throw new TypeError("Cannot construct Actor instances directly");
+    }
+
+    // Check if subclass has implemented the method
+    if (this.update === Actor.prototype.update) {
+      throw new TypeError("Must override update method");
+    }
+
+    if (this.collide === Actor.prototype.collide) {
+      throw new TypeError("Must override collide method");
+    }
+  }
+
+  update() {
+    throw new Error("Update method must be implemented by subclass");
+  }
+
+  collide() {
+    throw new Error("Collide method must be implemented by subclass");
+  }
 }
-}
+
 
 class Player extends Actor {
   constructor(pos, speed, isDead = false, isPowered = poweredUp, deathPhase = 0) {
@@ -586,6 +607,10 @@ function overlap(actor1, actor2) {
          actor1.pos.y + actor1.size.y > actor2.pos.y &&
          actor1.pos.y < actor2.pos.y + actor2.size.y;
 }
+
+Player.prototype.collide = function(state) {
+  return this;
+};
 
 ConveyorBelt.prototype.collide = function(state) {
  let updatedActors = state.actors.map(actor => {
