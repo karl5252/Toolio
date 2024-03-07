@@ -321,7 +321,9 @@ ConveyorBelt.prototype.update = function(time) {
 
 Lava.prototype.update = function(time, state) {
   let newPos = this.pos.plus(this.speed.times(time));
-  if (!state.level.touches(newPos, this.size, "wall") && !state.level.touches(newPos, this.size, "stone")) {  //lava can pass through bridges
+  if (!state.level.touches(newPos, this.size, "wall") &&
+   !state.level.touches(newPos, this.size, "stone" ) &&
+   !state.level.touches(newPos, this.size, "metal")) {  //lava can pass through bridges
     return new Lava(newPos, this.speed, this.reset);
   } else if (this.reset) {
     return new Lava(this.reset, this.speed, this.reset);
@@ -499,6 +501,7 @@ var levelChars = {
   ".": "empty",
   "%": "stone",
   "#": "wall",
+  "?": "metal",
   "+": "lava",
   "@": Player,
   "o": Coin,
@@ -568,7 +571,7 @@ class Level {
       for (let x = xStart; x < xEnd; x++) {
         let isOutside = x < 0 || x >= this.width || y < 0 || y >= this.height;
         let here = isOutside ? "wall" : this.rows[y][x];
-        if (type === "wall" && (here === "wall" || here === "stone" ||
+        if (type === "wall" && (here === "wall" || here === "stone" || here === "metal" ||
           here === "pipeTopLeft" || here === "pipeTopRight" || here === "pipeBodyLeft" || here === "pipeBodyRight" || 
           here === "pipeUpperCornerLeft" || here === "pipeLowerCornerLeft" || here === "pipeTopHorizontalUpper" || here === "pipeTopHorizontalLower" ||
           here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower" )) return true;
@@ -588,6 +591,7 @@ class Level {
     }
     if (!this.touches(newPos, actor.size, "wall") &&
      !this.touches(newPos, actor.size, "stone") &&
+     !this.touches(newPos, actor.size, "metal") &&
      !this.touches(newPos, actor.size, "bridge")) {
       return newPos; // New position is valid, no collision
     }
@@ -1078,6 +1082,9 @@ drawScreen(options) {
                 break;
               case "lava":
                 tileIndex = 1; // Assuming "lava" is the second sprite
+                break;
+              case "metal":
+                tileIndex = 3; // Assuming "metal" is the fourth sprite
                 break;
               case "stone":
                 tileIndex = 4; // Assuming "stone" is the fifth sprite
