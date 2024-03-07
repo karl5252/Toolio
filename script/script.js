@@ -17,6 +17,7 @@ let scorePerLevel = 0;
 let levelCounter = 1; 
 let playerLives = 3; 
 let coinsCollected = 0; 
+let overrideState = '';
 
 
 
@@ -599,6 +600,16 @@ class Level {
   }
 }
 
+// --- Cheat Codes ---
+function skipLevel() {
+  //potentially breaks the level creation. fixes after player death
+  console.log("Cheater! Skipping level...");
+  overrideState = "won";
+}
+function instaDeath() {
+  console.log("Cheater! Instant death ordered");
+  overrideState = "lost";
+}
 
 function overlap(actor1, actor2) {
     // If either actor is dead, they don't overlap.
@@ -795,15 +806,17 @@ class State {
 
     let newState = new State(this.level, actors, this.status, this.score, this.exitReached);
 
-    if (!newState.exitReached && newState.level.touches(newState.player.pos, newState.player.size, "exit")) {
+    if (!newState.exitReached && newState.level.touches(newState.player.pos, newState.player.size, "exit") || overrideState === "won") {
+      overrideState = "";
       newState.exitReached = true;
       newState.status = "won"; // Optionally change the game status
     }
 
     let player = newState.player;
 
-    if (player.isDead) {
+    if (player.isDead || overrideState === "lost") {
       // Player is dead, skip further collision checks
+      overrideState = "";
       newState.status = "lost";
       return newState;
     }
@@ -1548,10 +1561,13 @@ document.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   inputSequence += key;
   if (inputSequence.includes('tickettorejetto')) {
-    console.debug('Toolchain code entered!');
-    inputSequence = '';
+    inputSequence = ''; // Reset sequence
     playerLives += 30; // Award 30 lives
     totalScore += 3000; // Award 3000 points
+  } else if (inputSequence.includes('levelupupandaway')) {
+    inputSequence = ''; // Reset sequence
+    skipLevel(); 
+  }else if (inputSequence.includes('instantlose')) {
+    instaDeath();
   }
 });
-
