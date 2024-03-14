@@ -263,6 +263,73 @@ class Coin {
     return new Coin(basePos, basePos, Math.random() * Math.PI * 2);
   }
 }
+// collectible elements
+
+class Fire {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+    this.wobble = wobble;
+    this.interactable = true;
+    this.pointValue = 1500;
+  }
+  get type() {
+    return "fire";
+  }
+  static create(pos) {
+    let basePos = pos.plus(new Vec(0.2, 0.1));
+    return new Fire(basePos, basePos, Math.random() * Math.PI * 2);
+  }
+}
+class Water  {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+    this.wobble = wobble;
+    this.interactable = true;
+    this.pointValue = 1500;
+  }
+  get type() {
+    return "water";
+  }
+  static create(pos) {
+    let basePos = pos.plus(new Vec(0.2, 0.1));
+    return new Water(basePos, basePos, Math.random() * Math.PI * 2);
+  }
+}
+class Barley  {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+    this.wobble = wobble;
+    this.interactable = true;
+    this.pointValue = 1500;
+  }
+  get type() {
+    return "barley";
+  }
+  static create(pos) {
+    let basePos = pos.plus(new Vec(0.2, 0.1));
+    return new Barley(basePos, basePos, Math.random() * Math.PI * 2);
+  }
+}
+class Hops  {
+  constructor(pos, basePos, wobble) {
+    this.pos = pos;
+    this.basePos = basePos;
+    this.wobble = wobble;
+    this.interactable = true;
+    this.pointValue = 1500;
+  }
+  get type() {
+    return "hops";
+  }
+  static create(pos) {
+    let basePos = pos.plus(new Vec(0.2, 0.1));
+    return new Hops(basePos, basePos, Math.random() * Math.PI * 2);
+  }
+}
+
 
 class PowerUp {
   constructor(pos, basePos, wobble) {
@@ -343,6 +410,45 @@ Coin.prototype.update = function(time) {
                   this.basePos, wobble);
 };
 
+Fire.prototype.size = new Vec(1, 1);
+var wobbleSpeed = 8, wobbleDist = 0.07;
+
+Fire.prototype.update = function(time) {
+  let wobble = this.wobble + time * wobbleSpeed;
+  let wobblePos = Math.sin(wobble) * wobbleDist;
+  return new Fire(this.basePos.plus(new Vec(0, wobblePos)),
+                  this.basePos, wobble);
+};
+
+Water.prototype.size = new Vec(1, 1);
+var wobbleSpeed = 8, wobbleDist = 0.07;
+
+Water.prototype.update = function(time) {
+  let wobble = this.wobble + time * wobbleSpeed;
+  let wobblePos = Math.sin(wobble) * wobbleDist;
+  return new Water(this.basePos.plus(new Vec(0, wobblePos)),
+                  this.basePos, wobble);
+};
+
+Barley.prototype.size = new Vec(1, 1);
+var wobbleSpeed = 8, wobbleDist = 0.07;
+
+Barley.prototype.update = function(time) {
+  let wobble = this.wobble + time * wobbleSpeed;
+  let wobblePos = Math.sin(wobble) * wobbleDist;
+  return new Barley(this.basePos.plus(new Vec(0, wobblePos)),
+                  this.basePos, wobble);
+};
+
+Hops.prototype.size = new Vec(1, 1);
+var wobbleSpeed = 8, wobbleDist = 0.07;
+
+Hops.prototype.update = function(time) {
+  let wobble = this.wobble + time * wobbleSpeed;
+  let wobblePos = Math.sin(wobble) * wobbleDist;
+  return new Hops(this.basePos.plus(new Vec(0, wobblePos)),
+                  this.basePos, wobble);
+};
 
 
 //add class Hoopa and its methods
@@ -513,6 +619,10 @@ var levelChars = {
   "n": KeggaTroopa,
   "<": ConveyorBelt,
   ">": ConveyorBelt,
+  "x": Fire,
+  "w": Water,
+  "b": Barley,
+  "h": Hops,
   // Level elements
   "E": "exit", // The exit is represented by E in the level plan
   "B": "bridge", // Bridge section should affect collision. Player walks on top of it.
@@ -540,6 +650,7 @@ var levelChars = {
   "2": "valveDecal2",
   //decals
   "3": "barrier",
+  "4": "pedestal",
 
 
 };
@@ -681,6 +792,24 @@ Coin.prototype.collide = function(state) {
 
   return new State(newState.level, state.actors.filter(a => a != this), newState.status, newState.score);
 };
+
+Fire.prototype.collide = function(state) {
+  let newState = updatePoints(state, this.pointValue);
+  return new State(state.level, state.actors.filter(a => a != this), "won", newState.score);
+};  
+
+Water.prototype.collide = function(state) {
+  let newState = updatePoints(state, this.pointValue);
+    return new State(state.level, state.actors.filter(a => a != this), "won", newState.score);
+  };  
+Barley.prototype.collide = function(state) {
+  let newState = updatePoints(state, this.pointValue);
+    return new State(state.level, state.actors.filter(a => a != this), "won", newState.score);
+  }
+Hops.prototype.collide = function(state) {
+  let newState = updatePoints(state, this.pointValue);
+    return new State(state.level, state.actors.filter(a => a != this), "won", newState.score);
+  }
 
 PowerUp.prototype.collide = function(state) {
   console.debug("powerup collided");
@@ -1165,6 +1294,9 @@ drawScreen(options) {
               case "barrier":
                 tileIndex = 25;
                 break;
+              case "pedestal":
+                tileIndex = 27;
+                break;
             }
                // Calculate tileX considering the width, padding, and index
             let tileX = tileIndex * (gameSettings.scale + padding);
@@ -1380,7 +1512,55 @@ drawActors(actors) {
       let tileX = 27.2 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
       this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, width, height);
-    }else if (actor.type == "conveyorBelt") {
+    } else if (actor.type == "fire") {
+      let frame = 28;
+      let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
+      let sy = 0; // Assuming all frames are on the same row in the sprite sheet
+      let sWidth = 20; // Source width (sprite width)
+      let sHeight = 20; // Source height (sprite height)
+      let dx = x-3; // Destination x-coordinate on the canvas
+      let dy = y; // Destination y-coordinate on the canvas
+      let dWidth = width; // Destination width
+      let dHeight = height ; // Destination height
+      this.cx.drawImage(sprites.other, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+
+    } else if (actor.type == "water") {
+      let frame = 29;
+      let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
+      let sy = 0; // Assuming all frames are on the same row in the sprite sheet
+      let sWidth = 20; // Source width (sprite width)
+      let sHeight = 20; // Source height (sprite height)
+      let dx = x-3; // Destination x-coordinate on the canvas
+      let dy = y; // Destination y-coordinate on the canvas
+      let dWidth = width; // Destination width
+      let dHeight = height ; // Destination height
+      this.cx.drawImage(sprites.other, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+
+    } else if (actor.type == "barley") {
+      let frame = 30;
+      let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
+      let sy = 0; // Assuming all frames are on the same row in the sprite sheet
+      let sWidth = 21; // Source width (sprite width)
+      let sHeight = 20; // Source height (sprite height)
+      let dx = x-3; // Destination x-coordinate on the canvas
+      let dy = y; // Destination y-coordinate on the canvas
+      let dWidth = width; // Destination width
+      let dHeight = height ; // Destination height
+      this.cx.drawImage(sprites.other, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+
+    } else if (actor.type == "hops") {
+      let frame = 31.2;
+      let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
+      let sy = 0; // Assuming all frames are on the same row in the sprite sheet
+      let sWidth = 21; // Source width (sprite width)
+      let sHeight = 20; // Source height (sprite height)
+      let dx = x-3; // Destination x-coordinate on the canvas
+      let dy = y; // Destination y-coordinate on the canvas
+      let dWidth = width; // Destination width
+      let dHeight = height ; // Destination height
+      this.cx.drawImage(sprites.other, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+
+    } else if (actor.type == "conveyorBelt") {
       let frame = Math.floor(Date.now() / 100) % 3; // Change frame every 100ms, cycle through 3 frames
       let sx = frame * 21; // Move sx by 21 pixels for each frame (20 pixels width + 1 pixel padding)
       let sy = 0; // Assuming all frames are on the same row in the sprite sheet
