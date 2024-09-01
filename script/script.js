@@ -116,7 +116,7 @@ class Actor {
 
 
 class Player extends Actor {
-  constructor(pos, speed, isDead = false, isPowered = poweredUp, deathPhase = 0) {
+  constructor(pos, speed, isDead = false, isPowered = false, deathPhase = 0) {
     super(pos, speed, isDead);
 
     this.isPowered = isPowered;
@@ -142,7 +142,10 @@ Player.prototype.update = function(time, state, keys) {
     // Randomize speed slightly to make the game more interesting
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1); 
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1);
-    console.debug("player horizontal speed: " + xSpeed);
+    console.log("player horizontal speed: " + xSpeed);
+
+    console.log("player powered up satus: " + this.isPowered);
+
   } else {
     this.interactable = false; // Make the player non-interactable during death animation
     this.handleDeathAnimation(time);
@@ -186,7 +189,7 @@ Player.prototype.update = function(time, state, keys) {
 
   // Check for harmful collisions, such as with lava
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
-    this.isPowered = false;
+    //this.isPowered = false;
     poweredUp = false;
     //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change
     console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
@@ -379,9 +382,9 @@ class ConveyorBelt extends Actor {
 
   static create(pos, ch) {
     if (ch == "<") {
-      return new ConveyorBelt(pos, new Vec(Math.floor(Math.random() * (8 - (-8) + 1)) + (-8), 0)); // Moving left with random speed
+      return new ConveyorBelt(pos, new Vec(-5,0)); // Moving left with random speed
     } else if (ch == ">") {
-      return new ConveyorBelt(pos, new Vec(Math.floor(Math.random() * (8 - (-8) + 1)) + (-8), 0)); // Moving right with random speed
+      return new ConveyorBelt(pos, new Vec(5,0)); // Moving right with random speed
     }
   }
 }
@@ -769,7 +772,10 @@ ConveyorBelt.prototype.collide = function(state) {
     console.debug(actor.type + " is on conveyor belt");  // frankly logs only the player. Overlap works correctly though logging overlap between Hoopa/ Kegga and Conveyor
     // Create a new instance of the actor with the updated onConveyorBelt property
     console.debug(actor.speed.x);
-    let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor, { onConveyorBelt: this.speed.x });
+    let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor,
+    { onConveyorBelt: Math.floor(Math.random() * (8 - (-8) + 1)) + (-8) }
+    );
+
     return updatedActor; // Return the modified actor
   }
 
@@ -784,11 +790,11 @@ return new State(state.level, updatedActors, state.status, state.score);
 Lava.prototype.collide = function(state) {
   let player = state.player;
   if (!player.isDead) { // Check if the player is not already dead
-    poweredUp = false;
+    //poweredUp = false;
     //totalDeaths += 1;  // player will die while swimming in beer BUT his total lives wont change
     //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change 
     player.isDead = true;
-    player.isPowered = false;
+    //player.isPowered = false;
 
     //player.interactable = false; // Make the player non-interactable
     console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
@@ -835,7 +841,8 @@ PowerUp.prototype.collide = function(state) {
   let player = state.player;
   let newState = updatePoints(state, this.pointValue);
 
-  if(player.isPowered || poweredUp){
+  if(player.isPowered ){
+    player.isPowered = false;  // booyah! player is depowered
     return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score, isPowered);
   } else {
     player.isPowered = true;
@@ -864,7 +871,7 @@ Hoopa.prototype.collide = function(state) {
     }else if (!player.isDead && player.isPowered) {
       //player is not dead but depowered
       player.isPowered = false;
-      poweredUp = false;
+      //poweredUp = false;
       //console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
@@ -900,7 +907,7 @@ KeggaTroopa.prototype.collide = function(state) {
     } else if (!player.isDead && player.isPowered) {
       //player is not dead but depowered
       player.isPowered = false;
-      poweredUp = false;
+      //poweredUp = false;
       //console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
