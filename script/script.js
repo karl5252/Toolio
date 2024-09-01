@@ -3,8 +3,8 @@ const gameSettings = {
   playerXSpeed: 7,
   gravity: 30,
   jumpSpeed: 16,
-  scale: 20,
-  actorXOverlap: 4,
+  scale: 19.7, //20, // breaking the visuals
+  actorXOverlap: 4.15,//4,  // breaking the visuals
   canvasWidth: 800,
   canvasHeight: 600,
 };
@@ -46,7 +46,7 @@ function actorOverlap(actor1, actor2) {
 }
 
 function updatePoints(state, pointsToAdd) {
-  totalScore += pointsToAdd; 
+  totalScore += pointsToAdd + Math.random() * 10; // Add points and a random bonus
   return new State(state.level, state.actors, state.status,  totalScore);
 }
 
@@ -139,8 +139,10 @@ Player.prototype.size = new Vec(0.8, 1.5);
 Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
   if (!this.isDead) {
-    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed;
-    if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
+    // Randomize speed slightly to make the game more interesting
+    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1); 
+    if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1);
+    console.debug("player horizontal speed: " + xSpeed);
   } else {
     this.interactable = false; // Make the player non-interactable during death animation
     this.handleDeathAnimation(time);
@@ -148,7 +150,7 @@ Player.prototype.update = function(time, state, keys) {
 
   // Apply conveyor belt speed if on a conveyor belt
   if (this.onConveyorBelt !== undefined) {
-    xSpeed += this.onConveyorBelt;
+    xSpeed += this.onConveyorBelt;  // randomized speed ahead!
   }
 
   // Apply horizontal movement
@@ -162,7 +164,11 @@ Player.prototype.update = function(time, state, keys) {
     // Normal gravity and jump logic
     ySpeed += time * gameSettings.gravity;
     if (keys.isPressed("ArrowUp") && this.isOnGround(state)) {
-      ySpeed = -gameSettings.jumpSpeed;
+      ySpeed = -(gameSettings.jumpSpeed * (1 + Math.random() * 0.2 - 0.1)); // Randomize jump height to make the game more interesting
+      console.log("player vertical speed: " + ySpeed);
+    }
+    else {
+      console.log("player is not jumping");
     }
   } else {
     // Apply increased gravity during death animation
@@ -182,7 +188,8 @@ Player.prototype.update = function(time, state, keys) {
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     this.isPowered = false;
     poweredUp = false;
-    playerLives -= 1;
+    //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change
+    console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
     this.isDead = true;
     this.deathPhase = 0;  // Initiate death animation
   }
@@ -192,9 +199,10 @@ Player.prototype.update = function(time, state, keys) {
 };
 
 Player.prototype.isOnGround = function(state) {
+  console.log("player is on the ground");
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
-         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
-         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") //||
+         //state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");   // player now wont be able to jump while on the bridge
 };
 
 Player.prototype.handleDeathAnimation = function(time) {
@@ -271,7 +279,7 @@ class Fire {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = 1500;
+    this.pointValue = -1500;
   }
   get type() {
     return "fire";
@@ -371,9 +379,9 @@ class ConveyorBelt extends Actor {
 
   static create(pos, ch) {
     if (ch == "<") {
-      return new ConveyorBelt(pos, new Vec(-5, 0)); // Moving left
+      return new ConveyorBelt(pos, new Vec(Math.floor(Math.random() * (8 - (-8) + 1)) + (-8), 0)); // Moving left with random speed
     } else if (ch == ">") {
-      return new ConveyorBelt(pos, new Vec(5, 0)); // Moving right
+      return new ConveyorBelt(pos, new Vec(Math.floor(Math.random() * (8 - (-8) + 1)) + (-8), 0)); // Moving right with random speed
     }
   }
 }
@@ -683,10 +691,21 @@ class Level {
       for (let x = xStart; x < xEnd; x++) {
         let isOutside = x < 0 || x >= this.width || y < 0 || y >= this.height;
         let here = isOutside ? "wall" : this.rows[y][x];
-        if (type === "wall" && (here === "wall" || here === "stone" || here === "metal" ||
-          here === "pipeTopLeft" || here === "pipeTopRight" || here === "pipeBodyLeft" || here === "pipeBodyRight" || 
-          here === "pipeUpperCornerLeft" || here === "pipeLowerCornerLeft" || here === "pipeTopHorizontalUpper" || here === "pipeTopHorizontalLower" ||
-          here === "pipeBodyHorizontalUpper" || here === "pipeBodyHorizontalLower" )) return true;
+        if (type === "wall" && (
+          here === "wall" 
+          || here === "stone" 
+          //|| here === "metal"   // breaking the game
+          || here === "pipeTopLeft" 
+          //|| here === "pipeTopRight"  // breaking the game
+          //|| here === "pipeBodyLeft"  // breaking the game
+          || here === "pipeBodyRight" 
+          || here === "pipeUpperCornerLeft" 
+          || here === "pipeLowerCornerLeft" 
+          || here === "pipeTopHorizontalUpper" 
+          || here === "pipeTopHorizontalLower" 
+          || here === "pipeBodyHorizontalUpper" 
+          || here === "pipeBodyHorizontalLower" 
+        )) return true;
         if (here == type) return true;
       }
     }
@@ -766,13 +785,13 @@ Lava.prototype.collide = function(state) {
   let player = state.player;
   if (!player.isDead) { // Check if the player is not already dead
     poweredUp = false;
-    totalDeaths += 1;
-    playerLives -= 1;
+    //totalDeaths += 1;  // player will die while swimming in beer BUT his total lives wont change
+    //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change 
     player.isDead = true;
     player.isPowered = false;
 
     //player.interactable = false; // Make the player non-interactable
-    console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
+    console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
   }
 
   //totalScore = Math.max(0, totalScore - 50);
@@ -783,11 +802,11 @@ Coin.prototype.collide = function(state) {
   coinsCollected += 1; // Update the global coinsCollected variable
   let newState = updatePoints(state, this.pointValue);
 
-  console.debug(`Coin collected. Coins collected: ${coinsCollected}`);
+  //console.debug(`Coin collected. Coins collected: ${coinsCollected}`);
   // Check for extra life
   if (coinsCollected % 50 === 0) { // Every 50 coins
     playerLives += 1; // Award an extra life
-    console.debug(`Extra life awarded! Current lives: ${playerLives}`);
+    //console.debug(`Extra life awarded! Current lives: ${playerLives}`);
   }
 
   return new State(newState.level, state.actors.filter(a => a != this), newState.status, newState.score);
@@ -812,7 +831,7 @@ Hops.prototype.collide = function(state) {
   }
 
 PowerUp.prototype.collide = function(state) {
-  console.debug("powerup collided");
+  //console.debug("powerup collided");
   let player = state.player;
   let newState = updatePoints(state, this.pointValue);
 
@@ -821,7 +840,7 @@ PowerUp.prototype.collide = function(state) {
   } else {
     player.isPowered = true;
     poweredUp = true;
-    console.debug("player is powered");
+    //console.debug("player is powered");
     return new State(state.level, state.actors.filter(a => a != this), newState.status, state.score, isPowered = true);
   
   }
@@ -840,13 +859,13 @@ Hoopa.prototype.collide = function(state) {
       this.speed.x = 0;
 
       // Update the state with points for killing Hoopa
-      console.debug(`Hoopa killed by player. Points added: ${this.pointValue}`);
+      // console.debug(`Hoopa killed by player. Points added: ${this.pointValue}`);
       return updatePoints(state, this.pointValue);
     }else if (!player.isDead && player.isPowered) {
       //player is not dead but depowered
       player.isPowered = false;
       poweredUp = false;
-      console.debug("player is depowered now");
+      //console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
     } 
@@ -855,7 +874,7 @@ Hoopa.prototype.collide = function(state) {
       player.isDead = true;
       totalDeaths += 1;
       playerLives -= 1;
-      console.debug("Player is dead, remaining lives: " + playerLives);
+      //console.debug("Player is dead, remaining lives: " + playerLives);
       return new State(state.level, state.actors.filter(a => a != this), "lost", state.score);
     }
   }
@@ -873,7 +892,7 @@ KeggaTroopa.prototype.collide = function(state) {
     // Player jumps on top of KeggaTroopa, making it slide
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
       this.isSliding = true;
-      console.debug("KeggaTroopa is sliding. " + this.isSliding);
+      //console.debug("KeggaTroopa is sliding. " + this.isSliding);
       player.speed.y = -gameSettings.jumpSpeed / 1.5; // Bounce effect
 
       // No points update, just change in state
@@ -882,14 +901,14 @@ KeggaTroopa.prototype.collide = function(state) {
       //player is not dead but depowered
       player.isPowered = false;
       poweredUp = false;
-      console.debug("player is depowered now");
+      //console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
     } else if (!player.isDead) { // Check if the player is not already dead
         player.isDead = true;
         totalDeaths += 1;
         playerLives -= 1;
-        console.debug("Player is dead, remaining lives: " + playerLives);
+        //console.debug("Player is dead, remaining lives: " + playerLives);
       }
 
       // Remove the KeggaTroopa from the state and update status
@@ -1125,7 +1144,7 @@ drawScreen(options) {
   }
 
   drawIntro() {
-    console.debug('Drawing intro screen');
+    //console.debug('Drawing intro screen');
     this.drawScreen({
       messages: [
         'Welcome to the game!',
@@ -1141,7 +1160,7 @@ drawScreen(options) {
   }
 
   drawOutro() {
-    console.debug('Drawing outro screen');
+    //console.debug('Drawing outro screen');
     //let finalScore = Math.max(0, totalScore - (50 * totalDeaths));
     this.drawScreen({
       messages: [
@@ -1238,10 +1257,12 @@ drawScreen(options) {
                 tileIndex = 6; // Assuming "pipeTopLeft" is the seventh sprite
                 break;
               case "pipeTopRight":
-                tileIndex = 7; // Assuming "pipeTopRight" is the eighth sprite
+                //tileIndex = 7; // Assuming "pipeTopRight" is the eighth sprite
+                tileIndex = 6;  // we rbeak the implementation
                 break;
               case "pipeBodyLeft":
-                tileIndex = 8; // Assuming "pipeBodyLeft" is the ninth sprite
+                //tileIndex = 8; // Assuming "pipeBodyLeft" is the ninth sprite
+                tileIndex = 6; // we break the implementation
                 break;
               case "pipeBodyRight":
                 tileIndex = 9; // Assuming "pipeBodyRight" is the tenth sprite
@@ -1383,7 +1404,7 @@ drawHoopa(hoopa, x, y, width, height) {
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
   if (hoopa.isDead && hoopa.deadTime < 1.5) {
-    console.debug("Drawing dead hoopa");
+    //console.debug("Drawing dead hoopa");
     tile = 10;
   } else if (hoopa.speed.y != 0) {
     tile = 8;
@@ -1441,10 +1462,10 @@ drawKegga(keggaTroopa, x, y, width, height) {
   // Choose a tile from the monster's sprite sheet based on the monster's speed.
   let tile = 8;
   if (keggaTroopa.isSliding && !keggaTroopa.isDead) {
-    console.debug("Drawing sliding kegga monster");
+    //console.debug("Drawing sliding kegga monster");
     tile = 10;
   } else if (keggaTroopa.isDead && keggaTroopa.deadTime < 1.5) {
-    console.debug("Drawing dead kegga monster");
+    //console.debug("Drawing dead kegga monster");
     tile = 9;
   } else if (keggaTroopa.speed.y != 0) {
     tile = 8;
@@ -1645,7 +1666,7 @@ async function runGame(plans, Display) {
   await new Promise(resolve => {
       window.addEventListener("keydown", function handler(event) {
           if (event.key === 'Enter') {
-              console.debug('Game starting after intro...');
+              //console.debug('Game starting after intro...');
               window.removeEventListener("keydown", handler);
               resolve();
           }
@@ -1664,7 +1685,7 @@ async function runGame(plans, Display) {
     }
 }
 
-console.debug("You've won the game!");
+console.log("You've won the game!");
 display.drawOutro(totalScore);
 };
 
@@ -1714,7 +1735,7 @@ let pressed = Object.create(null); // New object to track freshly pressed keys
   function track(event) {
     if (keys.includes(event.key)) {
       let state = event.type == "keydown";
-      console.debug(event.key, state);
+      //console.debug(event.key, state);
       if (state && !down[event.key]) {
         pressed[event.key] = true; // Mark as freshly pressed if it wasn't down before
       }
