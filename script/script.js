@@ -1158,9 +1158,13 @@ drawScreen(options) {
     //console.debug('Drawing intro screen');
     this.drawScreen({
       messages: [
-        'Welcome to the game!',
+        'Welcome to Toolio!',
         'Press ENTER key to start',
-        'Use arrow keys to move',
+        'Pess C for cheats',
+        'Prees Q to qiut',
+        'Press 2 for mulitpayer',
+        'Instructons:',
+        '<<Use arrow keys to move and jump>>',
         // Add more messages as needed
       ],
       action: () => {
@@ -1679,8 +1683,27 @@ async function runGame(plans, Display) {
 // Generate a random number between 3 and 8
 const targetPresses = Math.floor(Math.random() * (8 - 3 + 1)) + 3;
 console.log(`Press 'Enter' ${targetPresses} times to start the game.`);
-
 let enterPressCount = 0; // Initialize counter
+
+// other options
+await new Promise(resolve => {
+  // wait for C press
+  window.addEventListener("keydown", function handler(event) {
+    if (event.key === 'c') {
+      // show cheats
+      console.log('Cheats enabled');
+      console.log('tickettorejetto - 30 lives, 3000 points');
+      console.log('levelupupandaway - skip level');
+      console.log('instantlose - instant death');
+
+      this.alert('Nice try, but you should not be looking for cheats in the console. Try playing the game instead!');
+      
+      window.removeEventListener("keydown", handler); // Correct placement inside the if block
+      resolve(); // Correct placement inside the if block
+    }
+  });
+});
+
 
 await new Promise(resolve => {
     // Wait for the user to press 'Enter' to start the game
