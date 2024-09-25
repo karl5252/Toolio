@@ -193,8 +193,8 @@ Player.prototype.update = function(time, state, keys) {
     poweredUp = false;
     //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change
     console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
-    this.isDead = true;
-    this.deathPhase = 0;  // Initiate death animation
+    //this.isDead = true;
+    //this.deathPhase = 0;  // Initiate death animation
   }
 
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
@@ -204,7 +204,8 @@ Player.prototype.update = function(time, state, keys) {
 Player.prototype.isOnGround = function(state) {
   console.log("player is on the ground");
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
-         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") //||
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
+         state.level.touches(this.pos.plus(new Vec(0,0.1)), this.size, "invisibleWall")//||
          //state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");   // player now wont be able to jump while on the bridge
 };
 
@@ -647,6 +648,7 @@ var levelChars = {
   "P": "pipeTopHorizontalLower",
   "Q": "pipeBodyHorizontalUpper",
   "S": "pipeBodyHorizontalLower",
+  "Z": "invisibleWall",
   //brewing tank
   "G": "brewingTankSectionLeft",
   "H": "brewingTankSectionRight",
@@ -697,6 +699,7 @@ class Level {
         if (type === "wall" && (
           here === "wall" 
           || here === "stone" 
+          || here === "invisibleWall"
           //|| here === "metal"   // breaking the game
           || here === "pipeTopLeft" 
           //|| here === "pipeTopRight"  // breaking the game
@@ -726,7 +729,8 @@ class Level {
     if (!this.touches(newPos, actor.size, "wall") &&
      !this.touches(newPos, actor.size, "stone") &&
      !this.touches(newPos, actor.size, "metal") &&
-     !this.touches(newPos, actor.size, "bridge")) {
+     !this.touches(newPos, actor.size, "bridge") &&
+    !this.touches(newPos, actor.size, "invisibleWall")) {  //lava can pass through it
       return newPos; // New position is valid, no collision
     }
     return actor.pos; // Collision detected, return original position
@@ -793,7 +797,7 @@ Lava.prototype.collide = function(state) {
     //poweredUp = false;
     //totalDeaths += 1;  // player will die while swimming in beer BUT his total lives wont change
     //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change 
-    player.isDead = true;
+    //player.isDead = true;
     //player.isPowered = false;
 
     //player.interactable = false; // Make the player non-interactable
@@ -982,9 +986,9 @@ class State {
       return newState;
     }
 
-    if (newState.level.touches(player.pos, player.size, "lava")) {
-      return new State(newState.level, actors, "lost", newState.score, newState.exitReached);
-    }
+    //if (newState.level.touches(player.pos, player.size, "lava")) {
+    //  return new State(newState.level, actors, "lost", newState.score, newState.exitReached);
+    //}
     
     for (let actor of actors) {
       //add update of stae for covneyor and actors
@@ -1324,6 +1328,9 @@ drawScreen(options) {
                 break;
               case "pedestal":
                 tileIndex = 27;
+                break;
+              case "invisibleWall":
+                tileIndex = 45;
                 break;
             }
                // Calculate tileX considering the width, padding, and index
@@ -1669,16 +1676,25 @@ async function runGame(plans, Display) {
   let display = new CanvasDisplay(document.body);
   display.drawIntro();
 
-  // Wait for the user to press 'Enter' to start the game
-  await new Promise(resolve => {
-      window.addEventListener("keydown", function handler(event) {
-          if (event.key === 'Enter') {
-              //console.debug('Game starting after intro...');
-              window.removeEventListener("keydown", handler);
-              resolve();
-          }
-      });
-  });
+// Generate a random number between 3 and 8
+const targetPresses = Math.floor(Math.random() * (8 - 3 + 1)) + 3;
+console.log(`Press 'Enter' ${targetPresses} times to start the game.`);
+
+let enterPressCount = 0; // Initialize counter
+
+await new Promise(resolve => {
+    // Wait for the user to press 'Enter' to start the game
+    window.addEventListener("keydown", function handler(event) {
+        if (event.key === 'Enter') {
+            enterPressCount++; // Increment counter
+            if (enterPressCount >= targetPresses) {
+                // If the counter matches the target, start the game
+                window.removeEventListener("keydown", handler);
+                resolve();
+            }
+        }
+    });
+});
 
   // Now start the game levels
   for (let level = 0; level < plans.length;) {
