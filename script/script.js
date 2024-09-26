@@ -1685,6 +1685,9 @@ const targetPresses = Math.floor(Math.random() * (8 - 3 + 1)) + 3;
 console.log(`Press 'Enter' ${targetPresses} times to start the game.`);
 let enterPressCount = 0; // Initialize counter
 
+
+
+
 await new Promise(resolve => {
     // Wait for the user to press 'Enter' to start the game
     window.addEventListener("keydown", function handler(event) {
