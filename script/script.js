@@ -1696,7 +1696,7 @@ await new Promise(resolve => {
                 resolve();
             }
         }
-      if (event.key === 'c') {
+		if (event.key === 'c') {
       // show cheats
       console.log('Cheats enabled');
       console.log('tickettorejetto - 30 lives, 3000 points');
@@ -1707,6 +1707,7 @@ await new Promise(resolve => {
       
       window.removeEventListener("keydown", handler); // Correct placement inside the if block
       resolve(); // Correct placement inside the if block
+    }
     });
 });
 
