@@ -1,5 +1,8 @@
 # Toolio Super Bro
 
+## Instructions
+![Play instructions image](https://github.com/karl5252/Toolio/blob/main/img/instructions.png)
+
 ## Overview
 This platformer game is an engaging web-based game where players control a character navigating through various levels filled with obstacles, enemies, coins, and lava. The game's objective is to collect coins, avoid or defeat enemies, and reach the level's exit to progress. The game features a physics engine for realistic movement and interaction within the game world.
 
