@@ -144,9 +144,9 @@ Player.prototype.update = function(time, state, keys) {
     // Randomize speed slightly to make the game more interesting
     if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed * (0.45 + Math.random() * 0.2 - 0.1); 
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1);
-    console.log("player horizontal speed: " + xSpeed);
+    console.debug("player horizontal speed: " + xSpeed);
 
-    console.log("player powered up status: " + this.isPowered);
+    console.debug("player powered up status: " + this.isPowered);
 
   } else {
     this.interactable = false; // Make the player non-interactable during death animation
@@ -170,10 +170,10 @@ Player.prototype.update = function(time, state, keys) {
     ySpeed += time * gameSettings.gravity;
     if (keys.isPressed("ArrowUp") && this.isOnGround(state)) {
       ySpeed = -(gameSettings.jumpSpeed * (1 + Math.random() * 0.2 - 0.1)); // Randomize jump height to make the game more interesting
-      console.log("player vertical speed: " + ySpeed);
+      console.debug("player vertical speed: " + ySpeed);
     }
     else {
-      console.log("player is not jumping");
+      console.debug("player is not jumping");
     }
   } else {
     // Apply increased gravity during death animation
@@ -194,7 +194,7 @@ Player.prototype.update = function(time, state, keys) {
     //this.isPowered = false;
     poweredUp = false;
     //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change
-    console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
+    console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
     //this.isDead = true;
     //this.deathPhase = 0;  // Initiate death animation
   }
@@ -204,7 +204,7 @@ Player.prototype.update = function(time, state, keys) {
 };
 
 Player.prototype.isOnGround = function(state) {
-  console.log("player is on the ground");
+  console.debug("player is on the ground");
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
          state.level.touches(this.pos.plus(new Vec(0,0.1)), this.size, "invisibleWall")//||
@@ -1730,6 +1730,7 @@ await new Promise(resolve => {
 });
 
     // Display the instruction screen
+    console.log('displaying instructions');
     display.drawInstructions();
     // Wait for the user to press 'Enter' to start the game
   console.log('Press \'S\' to start the game.');
