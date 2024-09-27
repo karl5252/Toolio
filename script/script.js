@@ -10,6 +10,7 @@ const gameSettings = {
 };
 let paused = false;
 let introShown = false;
+let instructionsShown = false;
 let poweredUp = false;
 let totalDeaths = 0;
 let totalScore = 0;
@@ -26,6 +27,7 @@ function createSprite(src) {
   sprite.src = src;
   return sprite;
 }
+const instructionsSprite = createSprite("img/instructions.png");
 
 let sprites = {
   other: createSprite("img/sprites.png"),
@@ -140,11 +142,11 @@ Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
   if (!this.isDead) {
     // Randomize speed slightly to make the game more interesting
-    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1); 
+    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed * (0.45 + Math.random() * 0.2 - 0.1); 
     if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1);
     console.log("player horizontal speed: " + xSpeed);
 
-    console.log("player powered up satus: " + this.isPowered);
+    console.log("player powered up status: " + this.isPowered);
 
   } else {
     this.interactable = false; // Make the player non-interactable during death animation
@@ -263,7 +265,7 @@ class Coin {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = 10;
+    this.pointValue = 0;//10;
   }
 
   get type() {
@@ -299,7 +301,7 @@ class Water  {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = 1500;
+    this.pointValue = -1500;
   }
   get type() {
     return "water";
@@ -315,7 +317,7 @@ class Barley  {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = 1500;
+    this.pointValue = -1500;
   }
   get type() {
     return "barley";
@@ -331,7 +333,7 @@ class Hops  {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = 1500;
+    this.pointValue = -1500;
   }
   get type() {
     return "hops";
@@ -801,7 +803,7 @@ Lava.prototype.collide = function(state) {
     //player.isPowered = false;
 
     //player.interactable = false; // Make the player non-interactable
-    console.log("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
+    console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
   }
 
   //totalScore = Math.max(0, totalScore - 50);
@@ -1103,7 +1105,7 @@ var CanvasDisplay = class CanvasDisplay {
     let levelText = `Level: WORLD ${levelCounter}`.toLocaleUpperCase();
     let livesText = `Lives: ${playerLives}`.toLocaleUpperCase();
     let scoreText = `Score: ${totalScore}`.toLocaleUpperCase();
-    let coinsCollectedText = `Coins: ${coinsCollected}`.toLocaleUpperCase();
+    let coinsCollectedText = `Coins: 0`.toLocaleUpperCase(); // ${coinsCollected}`.toLocaleUpperCase();
 
     let levelTextWidth = this.cx.measureText(levelText).width;
     let livesTextWidth = this.cx.measureText(livesText).width;
@@ -1159,7 +1161,7 @@ drawScreen(options) {
     this.drawScreen({
       messages: [
         'Welcome to Toolio!',
-        'Press ENTER key to start',
+        'Press ENTER key for new game',
         'Pess C for cheats',
         'Prees Q to qiut',
         'Press 2 for mulitpayer',
@@ -1190,6 +1192,18 @@ drawScreen(options) {
       }
     });
   }
+
+  drawInstructions() {
+    // draw the instructions image screen using sprite stored as instructionsSprite (set it to 800x600)
+    this.cx.drawImage(instructionsSprite, 0, 0, 800, 600);
+    // add text to the screen om the middle 'press S to start'
+    this.cx.fillStyle = 'red';
+    this.cx.font = 'bold 25px "Courier New"';
+    this.cx.textAlign = 'center';
+    this.cx.fillText('Press S to start', this.canvas.width / 2, this.canvas.height - 200);
+            
+  }
+
    
 
   updateViewport(state) {
@@ -1548,7 +1562,7 @@ drawActors(actors) {
       let tileX = 2 * gameSettings.scale; // Coin sprite position on the spritesheet
       this.cx.drawImage(sprites.other, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
     } else if (actor.type == "powerUp") {
-      let tileX = 27.2 * gameSettings.scale; // set the tileX to the powerup sprite
+      let tileX = 27.8 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
       this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, width, height);
     } else if (actor.type == "fire") {
@@ -1651,12 +1665,16 @@ function runLevel(level, Display) {
   let ending = 1;
   return new Promise((resolve) => {
     runAnimation((time) => {
-      if (introShown && !state.player.isDead) {
+      if (introShown && !state.player.isDead && instructionsShown) {
         state.status = 'playing';
       } else if (!introShown) {
         state.status = 'intro';
         display.drawIntro();
         return false; // Stop the animation loop if still on the intro screen
+      } else if (!introShown && !instructionsShown) {
+        state.status = 'instructions';
+        display.drawInstructions();
+        return false; // Stop the animation loop if still on the instructions screen
       }
       state = state.update(time, arrowKeys);
       display.syncState(state);
@@ -1685,9 +1703,6 @@ const targetPresses = Math.floor(Math.random() * (8 - 3 + 1)) + 3;
 console.log(`Press 'Enter' ${targetPresses} times to start the game.`);
 let enterPressCount = 0; // Initialize counter
 
-
-
-
 await new Promise(resolve => {
     // Wait for the user to press 'Enter' to start the game
     window.addEventListener("keydown", function handler(event) {
@@ -1714,11 +1729,24 @@ await new Promise(resolve => {
     });
 });
 
+    // Display the instruction screen
+    display.drawInstructions();
+    // Wait for the user to press 'Enter' to start the game
+  console.log('Press \'S\' to start the game.');
+  await new Promise(resolve => {
+    window.addEventListener("keydown", function handler(event) {
+      if (event.key === 's') {
+        window.removeEventListener("keydown", handler);
+        resolve();
+      }
+    });
+  });
+
   // Now start the game levels
   for (let level = 0; level < plans.length;) {
     let status = await runLevel(new Level(plans[level]), Display);
     if (status == "won") {
-        updateTotalScore(); // Update total score when a level is won
+        //updateTotalScore(); // Update total score when a level is won
         levelCounter++;
         level++;
     } else if (status == "lost") {
