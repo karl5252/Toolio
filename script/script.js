@@ -222,10 +222,10 @@ Player.prototype.update = function(time, state, keys) {
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     //this.isPowered = false;
     poweredUp = false;
-    //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change
+    playerLives -= 1;  
     console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
-    //this.isDead = true;
-    //this.deathPhase = 0;  // Initiate death animation
+    this.isDead = true;
+    this.deathPhase = 0;  // Initiate death animation
   }
 
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
