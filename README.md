@@ -70,3 +70,8 @@ To add new features, such as additional enemy types or power-ups, define new cla
 
 ## Conclusion
 This platformer game offers a foundation for a fun and extendable game project. Its modular design allows for easy expansion and customization. Enjoy exploring and enhancing the game!
+
+
+## Audio
+Ownership and copyright of all included music is maintained by Joel R. Steudler.
+Ownership of sounds effects is maintained by https://www.youtube.com/@jessicahartell1616

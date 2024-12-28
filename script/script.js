@@ -3,8 +3,8 @@ const gameSettings = {
   playerXSpeed: 7,
   gravity: 30,
   jumpSpeed: 16,
-  scale: 19.7, //20, // breaking the visuals
-  actorXOverlap: 4.15,//4,  // breaking the visuals
+  scale: 20, 
+  actorXOverlap: 4,
   canvasWidth: 800,
   canvasHeight: 600,
 };
@@ -20,7 +20,33 @@ let playerLives = 3;
 let coinsCollected = 0; 
 let overrideState = '';
 
+const audioFile= new Audio("audio/music/Plumber_Family_120bpm_120s.wav");
+audioFile.volume = 1.0;
+audioFile.muted = false;
 
+const stepOnHoppa = new Audio("audio/sfx/Splat.mp3");
+const stepOnKegga = new Audio("audio/sfx/Thwoom.mp3");
+const coinSound = new Audio("audio/sfx/Coin.mp3");
+const jump = new Audio("audio/sfx/Bump.mp3");
+const death = new Audio("audio/sfx/Death.mp3");
+
+// Function to play audio after user interaction
+function playAudio() {
+  audioFile.play().catch(error => {
+    console.error("Audio playback failed:", error);
+  });
+}
+
+// Ensure audio context is resumed on user interaction
+if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  const audioContext = new AudioContext();
+  document.addEventListener('click', () => {
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+  });
+}
 
 function createSprite(src) {
   let sprite = document.createElement("img");
@@ -48,7 +74,7 @@ function actorOverlap(actor1, actor2) {
 }
 
 function updatePoints(state, pointsToAdd) {
-  totalScore += pointsToAdd + Math.random() * 10; // Add points and a random bonus
+  totalScore += pointsToAdd; 
   return new State(state.level, state.actors, state.status,  totalScore);
 }
 
@@ -142,8 +168,8 @@ Player.prototype.update = function(time, state, keys) {
   let xSpeed = 0;
   if (!this.isDead) {
     // Randomize speed slightly to make the game more interesting
-    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed * (0.45 + Math.random() * 0.2 - 0.1); 
-    if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed * (1 + Math.random() * 0.5 - 0.1);
+    if (keys.ArrowLeft) xSpeed -= gameSettings.playerXSpeed; 
+    if (keys.ArrowRight) xSpeed += gameSettings.playerXSpeed;
     console.debug("player horizontal speed: " + xSpeed);
 
     console.debug("player powered up status: " + this.isPowered);
@@ -169,8 +195,12 @@ Player.prototype.update = function(time, state, keys) {
     // Normal gravity and jump logic
     ySpeed += time * gameSettings.gravity;
     if (keys.isPressed("ArrowUp") && this.isOnGround(state)) {
-      ySpeed = -(gameSettings.jumpSpeed * (1 + Math.random() * 0.2 - 0.1)); // Randomize jump height to make the game more interesting
+      jump.play().catch(error => {
+        console.error("Jump sound playback failed:", error);
+      });
+      ySpeed = -(gameSettings.jumpSpeed); 
       console.debug("player vertical speed: " + ySpeed);
+
     }
     else {
       console.debug("player is not jumping");
@@ -193,10 +223,11 @@ Player.prototype.update = function(time, state, keys) {
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     //this.isPowered = false;
     poweredUp = false;
-    //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change
+    playerLives -= 1;
+    totalDeaths += 1;  
     console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
-    //this.isDead = true;
-    //this.deathPhase = 0;  // Initiate death animation
+    this.isDead = true;
+    this.deathPhase = 0;  // Initiate death animation
   }
 
   return new Player(this.pos, new Vec(xSpeed, this.speed.y), this.isDead, this.isPowered, this.deathPhase);
@@ -207,14 +238,20 @@ Player.prototype.isOnGround = function(state) {
   console.debug("player is on the ground");
   return state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "wall") ||
          state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "stone") ||
-         state.level.touches(this.pos.plus(new Vec(0,0.1)), this.size, "invisibleWall")//||
-         //state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");   // player now wont be able to jump while on the bridge
+         state.level.touches(this.pos.plus(new Vec(0,0.1)), this.size, "invisibleWall")||
+         state.level.touches(this.pos.plus(new Vec(0, 0.1)), this.size, "bridge");   // player now wont be able to jump while on the bridge
 };
 
 Player.prototype.handleDeathAnimation = function(time) {
   switch (this.deathPhase) {
     case 0:
       console.debug("Player is dead - starting jump");
+      // play death sound
+      death.play().catch(error => {
+        console.error("Death sound playback failed:", error);
+      });
+      // stp music from playing
+      audioFile.pause();
       this.speed.y = -gameSettings.jumpSpeed * 1.5; // Slight jump, reduced jump speed
       this.deathPhase = 1;
       break;
@@ -265,7 +302,7 @@ class Coin {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = 0;//10;
+    this.pointValue = 10;
   }
 
   get type() {
@@ -285,7 +322,7 @@ class Fire {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = -1500;
+    this.pointValue = 1500;
   }
   get type() {
     return "fire";
@@ -301,7 +338,7 @@ class Water  {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = -1500;
+    this.pointValue = 1500;
   }
   get type() {
     return "water";
@@ -317,7 +354,7 @@ class Barley  {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = -1500;
+    this.pointValue = 1500;
   }
   get type() {
     return "barley";
@@ -333,7 +370,7 @@ class Hops  {
     this.basePos = basePos;
     this.wobble = wobble;
     this.interactable = true;
-    this.pointValue = -1500;
+    this.pointValue = 1500;
   }
   get type() {
     return "hops";
@@ -593,11 +630,16 @@ state.actors.forEach(actor => {
     if (actor instanceof Hoopa && !actor.isDead) {
       if (this.isSliding) {
         // Sliding KeggaTroopa collides with Hoopa
+        stepOnHoppa.play().catch(error => {
+          console.error("Splat sound playback failed:", error);
+        });
         actor.isDead = true; // Mark Hoopa as dead
         actor.interactable = false; // Make Hoopa non-interactable
         console.debug(`Hoopa slammed by sliding KeggaTroopa. Points added: ${actor.pointValue}`);
+        // play splashing sound
+
         totalScore += actor.pointValue; // Add points for killing Hoopa
-      }
+
     } else if (actor instanceof KeggaTroopa) {
       // Handle collision between KeggaTroopas
       if (this.isSliding && !actor.isSliding) {
@@ -611,6 +653,7 @@ state.actors.forEach(actor => {
       }
     }
   }
+}
 });
 
   return new KeggaTroopa(pos, new Vec(xSpeed, ySpeed), this.isDead, this.deadTime, this.isSliding, this.speedIncreased);
@@ -702,10 +745,10 @@ class Level {
           here === "wall" 
           || here === "stone" 
           || here === "invisibleWall"
-          //|| here === "metal"   // breaking the game
+          || here === "metal"   
           || here === "pipeTopLeft" 
-          //|| here === "pipeTopRight"  // breaking the game
-          //|| here === "pipeBodyLeft"  // breaking the game
+          || here === "pipeTopRight"  
+          || here === "pipeBodyLeft"  
           || here === "pipeBodyRight" 
           || here === "pipeUpperCornerLeft" 
           || here === "pipeLowerCornerLeft" 
@@ -779,8 +822,8 @@ ConveyorBelt.prototype.collide = function(state) {
     // Create a new instance of the actor with the updated onConveyorBelt property
     console.debug(actor.speed.x);
     let updatedActor = Object.assign(Object.create(Object.getPrototypeOf(actor)), actor,
-    { onConveyorBelt: Math.floor(Math.random() * (8 - (-8) + 1)) + (-8) }
-    );
+    { onConveyorBelt: this.speed.x });
+    
 
     return updatedActor; // Return the modified actor
   }
@@ -796,13 +839,13 @@ return new State(state.level, updatedActors, state.status, state.score);
 Lava.prototype.collide = function(state) {
   let player = state.player;
   if (!player.isDead) { // Check if the player is not already dead
-    //poweredUp = false;
-    //totalDeaths += 1;  // player will die while swimming in beer BUT his total lives wont change
-    //playerLives -= 1;  // player will die while swimming in beer BUT his total lives wont change 
-    //player.isDead = true;
-    //player.isPowered = false;
+    poweredUp = false;
+    totalDeaths += 1;  
+    playerLives -= 1;  
+    player.isDead = true;
+    player.isPowered = false;
 
-    //player.interactable = false; // Make the player non-interactable
+    player.interactable = false; // Make the player non-interactable
     console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
   }
 
@@ -811,9 +854,11 @@ Lava.prototype.collide = function(state) {
 };
 
 Coin.prototype.collide = function(state) {
+  coinSound.play().catch(error => {
+    console.error("Coin sound playback failed:", error);
+  });
   coinsCollected += 1; // Update the global coinsCollected variable
   let newState = updatePoints(state, this.pointValue);
-
   //console.debug(`Coin collected. Coins collected: ${coinsCollected}`);
   // Check for extra life
   if (coinsCollected % 50 === 0) { // Every 50 coins
@@ -870,6 +915,10 @@ Hoopa.prototype.collide = function(state) {
       this.isDead = true;
       this.interactable = false;
       this.speed.x = 0;
+      // play sound
+      stepOnHoppa.play().catch(error => {
+        console.error("Splat sound playback failed:", error);
+      });
 
       // Update the state with points for killing Hoopa
       // console.debug(`Hoopa killed by player. Points added: ${this.pointValue}`);
@@ -877,7 +926,6 @@ Hoopa.prototype.collide = function(state) {
     }else if (!player.isDead && player.isPowered) {
       //player is not dead but depowered
       player.isPowered = false;
-      //poweredUp = false;
       //console.debug("player is depowered now");
       return new State(state.level, state.actors.filter(a => a != this), state.status, state.score);
 
@@ -904,6 +952,9 @@ KeggaTroopa.prototype.collide = function(state) {
   if (this.interactable && overlap(this, player)) {
     // Player jumps on top of KeggaTroopa, making it slide
     if (player.pos.y + player.size.y < this.pos.y + 0.5) {
+      stepOnKegga.play().catch(error => {
+        console.error("Splat sound playback failed:", error);
+      });
       this.isSliding = true;
       //console.debug("KeggaTroopa is sliding. " + this.isSliding);
       player.speed.y = -gameSettings.jumpSpeed / 1.5; // Bounce effect
@@ -988,9 +1039,9 @@ class State {
       return newState;
     }
 
-    //if (newState.level.touches(player.pos, player.size, "lava")) {
-    //  return new State(newState.level, actors, "lost", newState.score, newState.exitReached);
-    //}
+    if (newState.level.touches(player.pos, player.size, "lava")) {
+      return new State(newState.level, actors, "lost", newState.score, newState.exitReached);
+    }
     
     for (let actor of actors) {
       //add update of stae for covneyor and actors
@@ -1006,6 +1057,10 @@ class State {
            newState = actor.collide(newState);
         }
       }
+    }
+    // Restart the music playback upon respawn
+    if (!player.isDead && audioFile.playbackRate === -1) {
+      restartAudio(audioFile);
     }
     return newState;
   }
@@ -1105,7 +1160,7 @@ var CanvasDisplay = class CanvasDisplay {
     let levelText = `Level: WORLD ${levelCounter}`.toLocaleUpperCase();
     let livesText = `Lives: ${playerLives}`.toLocaleUpperCase();
     let scoreText = `Score: ${totalScore}`.toLocaleUpperCase();
-    let coinsCollectedText = `Coins: 0`.toLocaleUpperCase(); // ${coinsCollected}`.toLocaleUpperCase();
+    let coinsCollectedText = `Coins: ${coinsCollected}`.toLocaleUpperCase();
 
     let levelTextWidth = this.cx.measureText(levelText).width;
     let livesTextWidth = this.cx.measureText(livesText).width;
@@ -1162,10 +1217,8 @@ drawScreen(options) {
       messages: [
         'Welcome to Toolio!',
         'Press ENTER key for new game',
-        'Pess C for cheats',
-        'Prees Q to qiut',
-        'Press 2 for mulitpayer',
-        'Instructons:',
+        'Press C for cheats',        
+        'Instructions:',
         '<<Use arrow keys to move and jump>>',
         // Add more messages as needed
       ],
@@ -1204,8 +1257,6 @@ drawScreen(options) {
             
   }
 
-   
-
   updateViewport(state) {
     const view = this.viewport;
     const margin = view.width / 3;
@@ -1236,7 +1287,6 @@ drawScreen(options) {
       this.canvas.height
     );
   }
-
   
   /**
    * Draws the background of the level on the canvas.
@@ -1286,12 +1336,10 @@ drawScreen(options) {
                 tileIndex = 6; // Assuming "pipeTopLeft" is the seventh sprite
                 break;
               case "pipeTopRight":
-                //tileIndex = 7; // Assuming "pipeTopRight" is the eighth sprite
-                tileIndex = 6;  // we rbeak the implementation
+                tileIndex = 7; // Assuming "pipeTopRight" is the eighth sprite
                 break;
               case "pipeBodyLeft":
-                //tileIndex = 8; // Assuming "pipeBodyLeft" is the ninth sprite
-                tileIndex = 6; // we break the implementation
+                tileIndex = 8; // Assuming "pipeBodyLeft" is the ninth sprite
                 break;
               case "pipeBodyRight":
                 tileIndex = 9; // Assuming "pipeBodyRight" is the tenth sprite
@@ -1562,7 +1610,7 @@ drawActors(actors) {
       let tileX = 2 * gameSettings.scale; // Coin sprite position on the spritesheet
       this.cx.drawImage(sprites.other, tileX + 1, 0, spriteWidth, height, x, y, spriteWidth, height);
     } else if (actor.type == "powerUp") {
-      let tileX = 27.8 * gameSettings.scale; // set the tileX to the powerup sprite
+      let tileX = 27.3 * gameSettings.scale; // set the tileX to the powerup sprite
       // Use the full width for powerup sprites
       this.cx.drawImage(sprites.other, tileX, 0, spriteWidth, height, x, y, width, height);
     } else if (actor.type == "fire") {
@@ -1663,6 +1711,10 @@ function runLevel(level, Display) {
   display.initializeLevel(level); // Initialize the level and set viewport dimensions
   let state = State.start(level);
   let ending = 1;
+
+  playAudio();
+  audioFile.loop = true; // Loop the background music
+
   return new Promise((resolve) => {
     runAnimation((time) => {
       if (introShown && !state.player.isDead && instructionsShown) {
@@ -1692,6 +1744,22 @@ function runLevel(level, Display) {
   });
 }
 
+// Reverse the auidio playback
+function reverseAudio(audio) {
+  audio.pause();
+  audio.currentTime = 0;
+  audio.playbackRate = 0; // -1 iis not supported...
+  audio.play();
+}
+
+// Restart the music playback upon respawn
+function restartAudio(audio) {
+  audio.pause();
+  audio.currentTime = 0;
+  audio.playbackRate = 1;
+  audio.play();
+}
+
 // --- Start the Game ---
 async function runGame(plans, Display) {
   // Display the intro screen first
@@ -1699,20 +1767,13 @@ async function runGame(plans, Display) {
   display.drawIntro();
 
 // Generate a random number between 3 and 8
-const targetPresses = Math.floor(Math.random() * (8 - 3 + 1)) + 3;
-console.log(`Press 'Enter' ${targetPresses} times to start the game.`);
-let enterPressCount = 0; // Initialize counter
-
 await new Promise(resolve => {
     // Wait for the user to press 'Enter' to start the game
     window.addEventListener("keydown", function handler(event) {
         if (event.key === 'Enter') {
-            enterPressCount++; // Increment counter
-            if (enterPressCount >= targetPresses) {
-                // If the counter matches the target, start the game
-                window.removeEventListener("keydown", handler);
-                resolve();
-            }
+          // If the counter matches the target, start the game
+          window.removeEventListener("keydown", handler);
+          resolve(); 
         }
 		if (event.key === 'c') {
       // show cheats
@@ -1736,7 +1797,10 @@ await new Promise(resolve => {
   console.log('Press \'S\' to start the game.');
   await new Promise(resolve => {
     window.addEventListener("keydown", function handler(event) {
-      if (event.key === 's') {
+      if (event.key === 's' || event.key === 'S') {
+        if (audioFile.paused) {
+          playAudio();
+        }
         window.removeEventListener("keydown", handler);
         resolve();
       }
@@ -1747,7 +1811,7 @@ await new Promise(resolve => {
   for (let level = 0; level < plans.length;) {
     let status = await runLevel(new Level(plans[level]), Display);
     if (status == "won") {
-        //updateTotalScore(); // Update total score when a level is won
+        updateTotalScore(); // Update total score when a level is won
         levelCounter++;
         level++;
     } else if (status == "lost") {
@@ -1774,6 +1838,9 @@ function runLevel(level, Display) {
 
           // If the game is still playing, continue the animation
           if (state.status == "playing") {
+            if (audioFile.paused) {
+              playAudio();
+            }
               // Check for player lives here
               if (playerLives <= 0) {
                   // Player has no lives left, show outro screen and end the game
@@ -1805,6 +1872,9 @@ let pressed = Object.create(null); // New object to track freshly pressed keys
   function track(event) {
     if (keys.includes(event.key)) {
       let state = event.type == "keydown";
+      /*if (audioFile.paused) {
+        playAudio();
+      }*/
       //console.debug(event.key, state);
       if (state && !down[event.key]) {
         pressed[event.key] = true; // Mark as freshly pressed if it wasn't down before
