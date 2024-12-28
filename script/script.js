@@ -28,6 +28,7 @@ const stepOnHoppa = new Audio("audio/sfx/Splat.mp3");
 const stepOnKegga = new Audio("audio/sfx/Thwoom.mp3");
 const coinSound = new Audio("audio/sfx/Coin.mp3");
 const jump = new Audio("audio/sfx/Bump.mp3");
+const death = new Audio("audio/sfx/Death.mp3");
 
 // Function to play audio after user interaction
 function playAudio() {
@@ -222,7 +223,8 @@ Player.prototype.update = function(time, state, keys) {
   if (!this.isDead && state.level.touches(this.pos, this.size, "lava")) {
     //this.isPowered = false;
     poweredUp = false;
-    playerLives -= 1;  
+    playerLives -= 1;
+    totalDeaths += 1;  
     console.debug("Player is swimming in beer not even hardhat will save you, remaining lives: " + playerLives);
     this.isDead = true;
     this.deathPhase = 0;  // Initiate death animation
@@ -244,6 +246,12 @@ Player.prototype.handleDeathAnimation = function(time) {
   switch (this.deathPhase) {
     case 0:
       console.debug("Player is dead - starting jump");
+      // play death sound
+      death.play().catch(error => {
+        console.error("Death sound playback failed:", error);
+      });
+      // stp music from playing
+      audioFile.pause();
       this.speed.y = -gameSettings.jumpSpeed * 1.5; // Slight jump, reduced jump speed
       this.deathPhase = 1;
       break;
@@ -1830,6 +1838,9 @@ function runLevel(level, Display) {
 
           // If the game is still playing, continue the animation
           if (state.status == "playing") {
+            if (audioFile.paused) {
+              playAudio();
+            }
               // Check for player lives here
               if (playerLives <= 0) {
                   // Player has no lives left, show outro screen and end the game
@@ -1861,9 +1872,9 @@ let pressed = Object.create(null); // New object to track freshly pressed keys
   function track(event) {
     if (keys.includes(event.key)) {
       let state = event.type == "keydown";
-      if (audioFile.paused) {
+      /*if (audioFile.paused) {
         playAudio();
-      }
+      }*/
       //console.debug(event.key, state);
       if (state && !down[event.key]) {
         pressed[event.key] = true; // Mark as freshly pressed if it wasn't down before
